@@ -1,0 +1,1 @@
+如果页面这有登录的人才能开，记得在@app.route下面加@login_required。

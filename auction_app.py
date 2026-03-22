@@ -1,43 +1,87 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, session, flash
+from werkzeug.security import generate_password_hash, check_password_hash
+from functools import wraps # To create reusable login_required decorator
 import sqlite3 as sql
 
 app = Flask(__name__)
+app.secret_key = 'nittany_login'
+database = 'nittany_auction.db'
 
 host = 'http://127.0.0.1:5000/'
 
-@app.route('/navigate', methods=['POST'])
-def navigate():
-    action = request.form.get('actions') # Get the selected value from the dropdown menu
+def get_db_connection():
+    conn = sql.connect(database)
+    conn.row_factory = sql.Row
+    return conn
 
-    if action == 'add':
-        return redirect(url_for('add_patient'))
-    elif action == 'delete':
-        return redirect(url_for('delete_patient'))
-    return redirect(url_for('index'))
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    # If user is already logged in, redirect to their dashboard; otherwise, show login page
+    if 'user_id' in session:
+        return redirect(url_for(f'{session["user_type"]}_dashboard'))
 
-
-@app.route('/add', methods=['POST', 'GET']) # Add patient name page
-def add_patient():
-    error = None
+    # Process login form submission
     if request.method == 'POST':
-        result = valid_name(request.form['FirstName'], request.form['LastName'])
-        if result:
-            return render_template('add_patient.html', error=error, result=result)
-        else:
-            error = 'invalid input name'
-    result = get_all_patients()
-    return render_template('add_patient.html', error=error, result=result)
+        input_email = request.form.get('email', '').strip()
+        input_password = request.form.get('password', '').strip()
+
+        if not input_email or not input_password:
+            flash('Email and password cannot be empty', 'danger')
+            return render_template('login.html')
+
+        try:
+            with get_db_connection() as conn:
+                user = conn.execute('SELECT user_id, email, password_hash, first_name, user_type FROM Users WHERE email = ?', (input_email,)).fetchone()
+        except Exception as e:
+            flash(f'System exception, please try again: {str(e)}', 'danger')
+            return render_template('login.html')
+
+        # Check if user exists
+        if not user:
+            flash('This email is not registered, please register an account first', 'danger')
+            return render_template('login.html')
+        
+        # Hash password verification
+        if not check_password_hash(user['password_hash'], input_password):
+            flash('Invalid password, please try again', 'danger')
+            return render_template('login.html')
+
+        # Save user info in session (login state)
+        session['user_id'] = user['user_id']
+        session['email'] = user['email']
+        session['first_name'] = user['first_name']
+        session['user_type'] = user['user_type']
+
+        # Redirect to respective dashboard based on user type
+        flash(f'Welcome back, {user["first_name"]}!', 'success')
+        return redirect(url_for(f'{user["user_type"]}_dashboard'))
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    flash('Successfully logged out', 'success')
+    return redirect(url_for('login'))
+
+# Resuable login_required decorator for all routes that require authentication
+def login_required(original_function):
+    @wraps(original_function)
+    def wrapper(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Login Required to view this page', 'danger')
+            return redirect(url_for('login'))
+        return original_function(*args, **kwargs) # If already logged in
+    return wrapper
 
 
-def valid_name(first_name, last_name): # Helper function to input name and add it to the database
-    connection = sql.connect('database.db')
-    connection.execute('CREATE TABLE IF NOT EXISTS users(pid INTEGER PRIMARY KEY AUTOINCREMENT, firstname TEXT, lastname TEXT);') # modify to automatically generated pid
-    connection.execute('INSERT INTO users (firstname, lastname) VALUES (?,?);', (first_name, last_name))
-    connection.commit()
-    cursor = connection.execute('SELECT * FROM users;')
-    return cursor.fetchall()
+@app.route('/')
+def index():
+    # If user is already logged in, redirect to their dashboard; otherwise, go to login page
+    if 'user_id' in session:
+        return redirect(url_for(f'{session["user_type"]}_dashboard'))
+    return redirect(url_for('login'))
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()
-
-
+    #app.run(debug=True)
