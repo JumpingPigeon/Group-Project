@@ -36,8 +36,8 @@ def add_patient():
 
 @app.route("/helpdesk_dashboard")
 def helpdesk_dashboard():
-    # Test-only: simulate a logged-in helpdesk user
-    session["user_email"] = "helpdesk_test@psu.edu"
+    if not session.get("user_email"):
+        return redirect(url_for("login"))
     return render_template("helpdesk_dashboard.html")
 
 
