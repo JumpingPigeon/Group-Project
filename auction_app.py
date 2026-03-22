@@ -1,9 +1,15 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, session
 import sqlite3 as sql
 
 app = Flask(__name__)
 
+app.secret_key = "dev_key"
+
 host = 'http://127.0.0.1:5000/'
+
+@app.route("/")
+def home():
+    return "Server running. Go to /helpdesk_dashboard"
 
 @app.route('/navigate', methods=['POST'])
 def navigate():
@@ -27,6 +33,12 @@ def add_patient():
             error = 'invalid input name'
     result = get_all_patients()
     return render_template('add_patient.html', error=error, result=result)
+
+@app.route("/helpdesk_dashboard")
+def helpdesk_dashboard():
+    # Test-only: simulate a logged-in helpdesk user
+    session["user_email"] = "helpdesk_test@psu.edu"
+    return render_template("helpdesk_dashboard.html")
 
 
 def valid_name(first_name, last_name): # Helper function to input name and add it to the database
