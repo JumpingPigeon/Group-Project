@@ -4,7 +4,7 @@ from functools import wraps # To create reusable login_required decorator
 import sqlite3 as sql
 
 app = Flask(__name__)
-app.secret_key = 'nittany_login'
+app.secret_key = "dev_key"
 database = 'nittany_auction.db'
 
 host = 'http://127.0.0.1:5000/'
@@ -13,6 +13,10 @@ def get_db_connection():
     conn = sql.connect(database)
     conn.row_factory = sql.Row
     return conn
+
+@app.route("/")
+def home():
+    return "Server running. Go to /helpdesk_dashboard"
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -74,6 +78,11 @@ def login_required(original_function):
         return original_function(*args, **kwargs) # If already logged in
     return wrapper
 
+@app.route("/helpdesk_dashboard")
+def helpdesk_dashboard():
+    if not session.get("user_email"):
+        return redirect(url_for("login"))
+    return render_template("helpdesk_dashboard.html")
 
 @app.route('/')
 def index():
