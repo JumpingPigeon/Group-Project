@@ -130,11 +130,9 @@ def seller_dashboard():
         return redirect(url_for("login"))
     return render_template("seller_dashboard.html")
 
-@app.route("/register")
+@app.route("/register", methods=['GET', 'POST'])
 def register():
-    if not session.get("email"):
-        return redirect(url_for("login"))
-    return render_template("register.html")
+    pass # Registration logic to be implemented here. For now, this is a placeholder.
 
 @app.route('/')
 def index():
