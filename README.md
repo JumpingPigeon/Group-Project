@@ -1,9 +1,18 @@
-## 431W Nitanny Auction Project
+# 431W Nitanny Auction Project
 2026 Spring, cmpsc 431w, 小组 刘轩，刘金旸，王皓，李思蕊
 
-# Do not modfy files in he Dataset folder
+# DEV Notes
+1. Do not modfy files in he Dataset folder
+2. venv is the python enviroment
 
-# venv is the python enviroment
+# Progress Tracking
+1. Data population - Hao
+2. User Login
+    1. Login Page - Hao
+    2. Helpdesk - Xuan
+    3. Seller - Sirui
+    4. Bidder - Jinyang
+3. TBD
 
 ## Features
 

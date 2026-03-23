@@ -14,17 +14,13 @@ def get_db_connection():
     conn.row_factory = sql.Row
     return conn
 
-@app.route("/")
-def home():
-    return "Server running. Go to /helpdesk_dashboard"
-
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    # If user is already logged in, redirect to their dashboard; otherwise, show login page
+    # If user is already logged in, redirect to their dashboard
     if 'user_id' in session:
         return redirect(url_for(f'{session["user_type"]}_dashboard'))
-
-    # Process login form submission
+    
+    # Login form submission handling
     if request.method == 'POST':
         input_email = request.form.get('email', '').strip()
         input_password = request.form.get('password', '').strip()
@@ -35,30 +31,48 @@ def login():
 
         try:
             with get_db_connection() as conn:
-                user = conn.execute('SELECT user_id, email, password_hash, first_name, user_type FROM Users WHERE email = ?', (input_email,)).fetchone()
+                user = conn.execute('SELECT email, password FROM Users WHERE email = ?', (input_email,)).fetchone()
+                
+                if not user:
+                    flash('This email is not registered.', 'danger')
+                    return render_template('login.html')
+                
+                if not check_password_hash(user['password'], input_password):
+                    flash('Invalid password.', 'danger')
+                    return render_template('login.html')
+
+                user_type = None
+                first_name = "User"
+                
+                helpdesk = conn.execute('SELECT email FROM Helpdesk WHERE email = ?', (input_email,)).fetchone()
+                if helpdesk:
+                    user_type = 'helpdesk'
+                else:
+                    seller = conn.execute('SELECT email FROM Sellers WHERE email = ?', (input_email,)).fetchone()
+                    if seller:
+                        user_type = 'seller'
+                        # first_name = input_email.split('@')[0]
+                    else:
+                        bidder = conn.execute('SELECT first_name FROM Bidders WHERE email = ?', (input_email,)).fetchone()
+                        user_type = 'bidder'
+                        first_name = bidder['first_name'] if bidder else "Bidder"
+
+                if not user_type:
+                    flash('Error! Please try again later.', 'warning')
+                    return render_template('login.html')
+
+               # Save user info in session for later use
+                session['user_id'] = user['email']
+                session['email'] = user['email']
+                session['first_name'] = first_name
+                session['user_type'] = user_type
+
+                flash(f'Welcome back, {first_name}!', 'success')
+                return redirect(url_for(f'{user_type}_dashboard'))
+
         except Exception as e:
-            flash(f'System exception, please try again: {str(e)}', 'danger')
+            flash(f'System error: {str(e)}', 'danger')
             return render_template('login.html')
-
-        # Check if user exists
-        if not user:
-            flash('This email is not registered, please register an account first', 'danger')
-            return render_template('login.html')
-        
-        # Hash password verification
-        if not check_password_hash(user['password_hash'], input_password):
-            flash('Invalid password, please try again', 'danger')
-            return render_template('login.html')
-
-        # Save user info in session (login state)
-        session['user_id'] = user['user_id']
-        session['email'] = user['email']
-        session['first_name'] = user['first_name']
-        session['user_type'] = user['user_type']
-
-        # Redirect to respective dashboard based on user type
-        flash(f'Welcome back, {user["first_name"]}!', 'success')
-        return redirect(url_for(f'{user["user_type"]}_dashboard'))
     
     return render_template('login.html')
 
@@ -106,16 +120,25 @@ def bidder_dashboard():
 
 @app.route("/helpdesk_dashboard")
 def helpdesk_dashboard():
-    if not session.get("user_email"):
+    if not session.get("email"):
         return redirect(url_for("login"))
     return render_template("helpdesk_dashboard.html")
 
+@app.route("/seller_dashboard")
+def seller_dashboard():
+    if not session.get("email"):
+        return redirect(url_for("login"))
+    return render_template("seller_dashboard.html")
+
+@app.route("/register")
+def register():
+    if not session.get("email"):
+        return redirect(url_for("login"))
+    return render_template("register.html")
+
 @app.route('/')
 def index():
-    # If user is already logged in, redirect to their dashboard; otherwise, go to login page
-    if 'user_id' in session:
-        return redirect(url_for(f'{session["user_type"]}_dashboard'))
-    return redirect(url_for('login'))
+    return render_template('index.html')
 
 if __name__ == '__main__':
     app.run()

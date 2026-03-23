@@ -24,8 +24,8 @@
     <div class="card">
       <h2>Welcome, HelpDesk</h2>
 
-      {% if session.get('user_email') %}
-        <p class="muted">Logged in as: <strong>{{ session.get('user_email') }}</strong></p>
+      {% if session.get('email') %}
+        <p class="muted">Logged in as: <strong>{{ session.get('email') }}</strong></p>
       {% else %}
         <p class="muted">You are viewing the HelpDesk dashboard.</p>
       {% endif %}
