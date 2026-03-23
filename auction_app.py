@@ -78,6 +78,32 @@ def login_required(original_function):
         return original_function(*args, **kwargs) # If already logged in
     return wrapper
 
+def dashboard_endpoint(user_type):
+    if user_type is None:
+        return 'login'
+    t = str(user_type).strip().lower()
+    if t in ('bidder', 'buyer'):
+        return 'bidder_dashboard'
+    return f'{t}_dashboard'
+
+
+@app.route('/bidder_dashboard')
+def bidder_dashboard():
+    if 'user_id' not in session:
+        flash('Login Required to view this page', 'danger')
+        return redirect(url_for('login'))
+
+    role = str(session.get('user_type', '')).strip().lower()
+    if role not in ('bidder', 'buyer'):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('login'))
+
+    return render_template(
+        'bidder_dashboard.html',
+        email=session.get('email'),
+        first_name=session.get('first_name')
+    )
+
 @app.route("/helpdesk_dashboard")
 def helpdesk_dashboard():
     if not session.get("user_email"):

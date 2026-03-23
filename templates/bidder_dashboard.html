@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bidder — NittanyAuction</title>
+  <style>
+    :root {
+      --bg: #f0f4ff;
+      --card: #ffffff;
+      --navy: #1e3a5f;
+      --accent: #2563eb;
+      --muted: #64748b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: linear-gradient(160deg, var(--bg) 0%, #e8f0fe 50%, #fefce8 100%);
+      min-height: 100vh;
+      color: #0f172a;
+    }
+    .top {
+      background: var(--navy);
+      color: #fff;
+      padding: 14px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .top strong { font-size: 1.05rem; letter-spacing: 0.02em; }
+    .badge {
+      font-size: 0.8rem;
+      background: rgba(255,255,255,.15);
+      padding: 4px 10px;
+      border-radius: 999px;
+    }
+    .wrap {
+      max-width: 880px;
+      margin: 28px auto 48px;
+      padding: 0 18px;
+    }
+    .hero {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 22px 24px;
+      box-shadow: 0 4px 24px rgba(30, 58, 95, 0.08);
+      border: 1px solid rgba(37, 99, 235, 0.12);
+    }
+    .hero h1 {
+      margin: 0 0 6px;
+      font-size: 1.45rem;
+      color: var(--navy);
+    }
+    .hero .sub {
+      color: var(--muted);
+      font-size: 0.95rem;
+      margin: 0 0 16px;
+    }
+    .email {
+      display: inline-block;
+      background: #eff6ff;
+      color: #1d4ed8;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      word-break: break-all;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .tile {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 14px 16px;
+      border: 1px solid #e2e8f0;
+      font-size: 0.92rem;
+    }
+    .tile h3 {
+      margin: 0 0 6px;
+      font-size: 0.85rem;
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .tile p { margin: 0; color: #334155; line-height: 1.45; }
+    .actions {
+      margin-top: 22px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    a.btn {
+      display: inline-block;
+      background: var(--accent);
+      color: #fff !important;
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 0.92rem;
+      text-decoration: none;
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+    }
+    a.btn:hover { filter: brightness(1.05); }
+    a.link { color: var(--accent); font-size: 0.9rem; }
+    .foot-note {
+      margin-top: 28px;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div>
+      <strong>NittanyAuction</strong>
+      <span class="badge">Bidder · CMPSC 431W</span>
+    </div>
+    <span style="opacity:.9;font-size:.9rem;">We are ~prototype~ mode</span>
+  </header>
+
+  <main class="wrap">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div style="margin-bottom:12px;padding:10px 14px;border-radius:10px;font-size:0.9rem;
+            background:{% if category == 'success' %}#dcfce7{% else %}#fee2e2{% endif %};
+            color:{% if category == 'success' %}#166534{% else %}#991b1b{% endif %};">
+            {{ message }}
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <section class="hero">
+      <h1>Hey{% if first_name %}, {{ first_name }}{% endif %} 👋</h1>
+      <p class="sub">You’re signed in as a <strong>bidder</strong> — browse auctions, place bids, and (soon) track what you’re watching.</p>
+      <p style="margin:0 0 6px;font-size:0.85rem;color:var(--muted);">Campus email</p>
+      <span class="email">{{ email }}</span>
+
+      <div class="grid">
+        <div class="tile">
+          <h3>What works now</h3>
+          <p>Login + role redirect. Use this page as your home base while you wire up listings and bids.</p>
+        </div>
+        <div class="tile">
+          <h3>What’s next</h3>
+          <p>Hook up <code>Auction_Listings</code> / your DB tables, then add “My bids” from <code>Bids</code>.</p>
+        </div>
+        <div class="tile">
+          <h3>Group tip</h3>
+          <p>Split routes: one teammate on SQL, one on HTML — merge early so demo day is chill.</p>
+        </div>
+      </div>
+
+      <div class="actions">
+        <span class="btn" style="opacity:.85;cursor:default;background:#64748b;box-shadow:none;">Browse auctions — coming soon</span>
+        <a class="link" href="{{ url_for('logout') }}">Log out</a>
+      </div>
+    </section>
+
+    <p class="foot-note">Built for Lion State — keep it simple, ship it for the progress review.</p>
+  </main>
+</body>
+</html>
