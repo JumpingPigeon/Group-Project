@@ -7,6 +7,11 @@
 
 # Progress Tracking
 1. Data population - Hao
+    - DB Browser for SQLite is used for Data Population
+    - Intruction:
+        - Open the tool
+        - Open the database
+        - choose import data from csv files
 2. User Login
     1. Login Page - Hao
     2. Helpdesk - Xuan
