@@ -140,6 +140,11 @@ def register():
 def index():
     return render_template('index.html')
 
+@app.route('/search')
+def search():
+    query = request.args.get('q')
+    return f"You searched for: {query}. Please login to see results."
+
 if __name__ == '__main__':
     app.run()
     #app.run(debug=True)
