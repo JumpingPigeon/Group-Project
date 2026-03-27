@@ -1,13 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
     <head>
-        
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+      <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@200..700&family=Rubik:ital,wght@0,300..900;1,300..900&display=swap" rel="stylesheet">
         <style>
             .option{
                 font-size: 14px;
-                margin-left: 15px;
+                margin-left: 0px;
+                font-family:"Rubik", sans-serif;
+                width:140px;
                 text-align: center;
+                height:50px;
+                display:flex;
+                justify-content:center;
+                border-left:1px solid white;
+                border-right:1px solid white;
+              
+            }
+            .option:hover{
+              background-color:#0D6EFD;
+              transition:1s;
+              transform: scale(1.2);
             }
             body{
                 font-family: Arial, Helvetica, sans-serif;
@@ -29,9 +44,6 @@
                 display: block;
             }
 
-            #navigator a:hover {
-                background-color: #e9ecef;
-            }
 
             #main-page{
                 margin-left: 90px;
@@ -53,15 +65,15 @@
     </head>
     <body>
         <div id="header" class="fixed-top w-100 text-white align-items-center d-flex" style="padding: 14px 20px;">
-            <div class="px-3" style="font-size: 13px;">Nittany Auction - {{session.user_email}}</div>
-            <div class="option pill"><a href="">Profile</a></div>
-            <div class="option"><a href="">Sell</a></div>
-            <div class="option"><a href="">My Product</a></div>
-            <div class="option"><form action="/logout" method="get">
-                    <button style="height: 30px;font-size: 13px;" type="submit" class="btn btn-danger">
+            <div class="px-3" style="font-size: 18px;font-family:Oswald, sans-serif;">Nittany Auction - Seller</div>
+            <div class="option " style="margin-left:150px;"><a  style="margin:auto;" href="/seller_profile">Profile</a></div>
+            <div class="option"><a style="margin:auto;" href="/seller_sell">Sell</a></div>
+            <div class="option" style="margin-right:150px;"><a style="margin:auto;" href="/seller_myproduct">My Product</a></div>
+            <div class="" style="margin-left:auto;">
+                    <button style="Rubik, sans-serif; height: 30px;font-size: 13px;" type="submit" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#login_confirm">
                         Logout
                     </button>
-                </form>
+                
             </div>
         </div>
         <div class="container">
@@ -73,7 +85,27 @@
             
         </div>
         </div>
-        
+        <div class="modal" tabindex="-1" id="login_confirm">
+<div class="modal-dialog">
+<div class="modal-content">
+<div class="modal-header">
+  <h5 class="modal-title">Logout</h5>
+  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+<div class="modal-body">
+  <p>Are you sure you want to logout?</p>
+</div>
+<div class="modal-footer">
+  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">No</button>
+  <form action="/logout" method="get">
+    <button type="button" class="btn btn-primary">Yes</button>
+    
+  </form>
+  
+</div>
+</div>
+</div>
+</div>
 
 
 
