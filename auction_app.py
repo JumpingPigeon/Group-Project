@@ -130,10 +130,6 @@ def seller_dashboard():
         return redirect(url_for("login"))
     return render_template("seller_dashboard.html")
 
-@app.route("/register", methods=['GET', 'POST'])
-def register():
-    pass # Registration logic to be implemented here. For now, this is a placeholder.
-
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -142,6 +138,16 @@ def index():
 def search():
     query = request.args.get('q')
     return f"You searched for: {query}. Please login to see results."
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    pass
+
+@app.route('/account-redirect')
+def account_redirect():
+    if 'user_id' in session:
+        return redirect(url_for(f'{session["user_type"]}_dashboard'))
+    return redirect(url_for('login'))
 
 if __name__ == '__main__':
     app.run()
