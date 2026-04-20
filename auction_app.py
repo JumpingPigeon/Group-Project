@@ -14,6 +14,23 @@ def get_db_connection():
     conn.row_factory = sql.Row
     return conn
 
+def build_bc(conn, c_name):
+    bc = []
+    current = c_name    
+    for _ in range(20):
+        r = conn.execute('SELECT parent_category FROM Categories WHERE category_name = ?',(current,)).fetchone()
+        if r == None:
+            break;
+        elif r['parent_category'] == 'Root':
+            bc.insert(0, ('All Categories', url_for('categories')))
+            break;
+        parent = r['parent_category']
+        bc.insert(0, (parent, url_for('category_detail', name=parent)))
+        current = parent
+    return bc
+
+
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     # If user is already logged in, redirect to their dashboard
@@ -148,6 +165,10 @@ def account_redirect():
     if 'user_id' in session:
         return redirect(url_for(f'{session["user_type"]}_dashboard'))
     return redirect(url_for('login'))
+
+
+
+
 
 if __name__ == '__main__':
     app.run()
