@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Active Auctions</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; background: #f5f7fb; }
+        .nav { background: #111827; color: #fff; padding: 12px 18px; }
+        .container { max-width: 1100px; margin: 20px auto; padding: 0 16px; }
+        .card { background: #fff; border-radius: 10px; padding: 16px; margin-bottom: 14px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+        .muted { color: #6b7280; }
+        .flash { margin-bottom: 12px; padding: 10px; border-radius: 8px; background: #eef2ff; }
+        a { color: #2563eb; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <strong>NittanyAuction</strong> - Active Auctions
+    </div>
+    <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="grid">
+            {% for item in listings %}
+            <div class="card">
+                <h3>{{ item.auction_title }}</h3>
+                <p><strong>Product:</strong> {{ item.product_name }}</p>
+                <p><strong>Category:</strong> {{ item.category }}</p>
+                <p><strong>Seller:</strong> {{ item.seller_email }}</p>
+                <p><strong>Highest Bid:</strong> ${{ '%.2f'|format(item.highest_bid) }}</p>
+                <p><strong>Remaining Bids:</strong> {{ item.remaining_bids }}</p>
+                <p class="muted">{{ item.product_description }}</p>
+                <p>
+                    <a href="{{ url_for('bidder_auction_detail', seller_email=item.seller_email, listing_id=item.listing_id) }}">
+                        View and Bid
+                    </a>
+                </p>
+            </div>
+            {% endfor %}
+        </div>
+
+        {% if not listings %}
+            <div class="card muted">No active auctions are available.</div>
+        {% endif %}
+        <p><a href="{{ url_for('bidder_dashboard') }}">Back to Bidder Dashboard</a></p>
+    </div>
+</body>
+</html>
