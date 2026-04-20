@@ -166,7 +166,13 @@ def account_redirect():
         return redirect(url_for(f'{session["user_type"]}_dashboard'))
     return redirect(url_for('login'))
 
-
+@app.route('/categories')
+def categories():
+    with get_db_connection() as conn:
+        cats = conn.execute(
+            'SELECT category_name FROM Categories WHERE parent_category = ?', ('Root',)
+        ).fetchall()
+    return render_template('categories.html', categories=cats)
 
 
 
