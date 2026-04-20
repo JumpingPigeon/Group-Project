@@ -3,8 +3,8 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>HelpDesk Dashboard - Nittany Auction</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
+    <title>Nittany Auction: HelpDesk</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
     <style>
         :root {
             --lsu-blue: #001e44;
@@ -29,142 +29,140 @@
         }
         .container {
             flex-grow: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
             padding: 40px 20px;
+            max-width: 1000px;
         }
-        .dashboard-card {
-            width: 100%;
-            max-width: 800px;
-            padding: 40px;
-            background: #fff;
-            border-radius: 15px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        .dashboard-header { 
+            background: #fff; 
+            padding: 30px; 
+            border-radius: 15px; 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05); 
+            margin-bottom: 30px; 
+        }
+        .section-title { 
+            color: var(--lsu-blue); 
+            font-weight: 700; 
+        }
+        .request-item { 
+            background: #fff; 
+            border-left: 4px solid var(--lsu-blue); 
+            padding: 20px; 
+            margin-bottom: 15px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05); 
+            transition: transform 0.2s; 
+        }
+        .request-item:hover { 
+            transform: translateX(5px); 
+        }
+        .request-item.assigned { 
+            border-left-color: #ffc107; 
+            background-color: #fffdf5; 
+        }
+        .btn-lsu { 
+            background-color: var(--lsu-blue); 
+            color: white; 
+            border-radius: 20px; 
+            padding: 5px 15px; 
+            font-size: 0.9rem; 
             border: none;
         }
-        .section-title {
-            color: var(--lsu-blue);
-            font-weight: 700;
-            margin-bottom: 1.5rem;
-            border-bottom: 2px solid #f1f3f5;
-            padding-bottom: 15px;
+        .btn-lsu:hover { 
+            background-color: var(--lsu-blue-hover); 
+            color: white; 
         }
-        .btn-lsu {
-            background-color: var(--lsu-blue);
-            color: white;
-            border-radius: 30px;
-            padding: 12px 25px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            border: none;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .btn-lsu:hover {
-            background-color: var(--lsu-blue-hover);
-            color: white;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,30,68,0.2);
-        }
-        .btn-lsu.disabled {
-            background-color: #e9ecef;
-            color: #adb5bd;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-        .status-badge {
-            font-size: 0.85rem;
-            padding: 5px 12px;
-            border-radius: 15px;
-            background: #eef2ff;
-            color: var(--lsu-blue);
-            font-weight: 600;
-        }
-        .admin-meta {
-            color: #6b7280;
-            font-size: 0.95rem;
+        .badge-type { 
+            font-size: 0.75rem; 
+            padding: 3px 8px; 
+            border-radius: 10px; 
+            background: #eef2ff; 
+            color: var(--lsu-blue); 
         }
     </style>
 </head>
 <body>
 
 <nav class="navbar navbar-light">
-    <a class="navbar-brand" href="/">Nittany Auction</a>
+    <a class="navbar-brand" style="cursor: default;">Nittany Auction</a>
     <div class="ml-auto">
-        <a class="btn btn-outline-danger px-4" style="border-radius: 30px;" href="{{ url_for('logout') }}">Logout</a>
+            <a class="btn btn-outline-danger btn-sm" href="{{ url_for('logout') }}">Logout</a>
     </div>
 </nav>
 
 <div class="container">
-    <div class="dashboard-card">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2 class="section-title mb-0" style="border:none; padding:0;">HelpDesk Portal</h2>
-            <span class="status-badge">{{ session.get('position') }}</span>
+    <div class="dashboard-header d-flex justify-content-between align-items-center">
+        <div>
+            <h2 class="section-title mb-1">HelpDesk Portal</h2>
+            <p class="text-muted mb-0">Welcome back, <strong>{{ session.get('first_name') }}</strong> ({{ session.get('position') }})</p>
         </div>
+        <div id="current-time" class="text-muted font-weight-bold"></div>
+    </div>
 
-        <div class="row mb-4">
-            <div class="col-md-12">
-                <p class="admin-meta">
-                    Welcome back, <strong>{{ session.get('first_name') }}</strong>. 
-                </p>
-                <div id="current-time" class="text-muted small font-weight-bold" style="font-family: monospace;">
-                    Loading time...
-                </div>
+    {% if my_assigned %}
+    <h4 class="mb-3 text-warning">📌 My Assigned Tasks ({{ my_assigned|length }})</h4>
+    {% for req in my_assigned %}
+    <div class="request-item assigned">
+        <div class="d-flex justify-content-between">
+            <div>
+                <span class="badge badge-warning mb-2">In Progress</span>
+                <span class="badge-type ml-2">{{ req.request_type }}</span>
+                <h5 class="mt-2">#{{ req.request_id }} - {{ req.sender_email }}</h5>
+                <p class="text-muted small">{{ req.request_desc }}</p>
             </div>
-        </div>
-
-        <div class="row">
-            <div class="col-md-6 mb-3">
-                <div class="p-3 border rounded shadow-sm">
-                    <h6>Category Management</h6>
-                    <p class="small text-muted">New Product Category Requests</p>
-                    <a href="/helpdesk_requests" class="btn btn-lsu btn-block">
-                        View Requests
-                    </a>
-                </div>
-            </div>
-
-            <div class="col-md-6 mb-3">
-                <div class="p-3 border rounded bg-light">
-                    <h6 class="text-muted">User Management</h6>
-                    <p class="small text-muted">User Role and Permissions</p>
-                    <button class="btn btn-lsu btn-block disabled">
-                        View Requests
-                    </button>
-                </div>
-            </div>
-            
-            <div class="col-md-6 mb-3">
-                <div class="p-3 border rounded bg-light">
-                    <h6 class="text-muted">Market Analysis</h6>
-                    <p class="small text-muted">Generate reports on auction trends.</p>
-                    <button class="btn btn-lsu btn-block disabled">
-                        View Analytics
-                    </button>
-                </div>
+            <div class="text-right">
+                {% if req.request_type == 'AddCategory' %}
+                    <!-- AddCategory -->
+                    <form action="{{ url_for('approve_category_request') }}" method="POST" class="d-inline">
+                        <input type="hidden" name="request_id" value="{{ req.request_id }}">
+                        <button class="btn btn-success btn-sm mb-1">Approve</button>
+                    </form>
+                    <form action="{{ url_for('reject_request') }}" method="POST" class="d-inline">
+                        <input type="hidden" name="request_id" value="{{ req.request_id }}">
+                        <button class="btn btn-danger btn-sm mb-1">Reject</button>
+                    </form>
+                {% else %}
+                    <!-- Other Requests -->
+                    <form action="{{ url_for('mark_completed') }}" method="POST" class="d-inline">
+                        <input type="hidden" name="request_id" value="{{ req.request_id }}">
+                        <button class="btn btn-outline-primary btn-sm mb-1">Complete</button>
+                    </form>
+                    <form action="{{ url_for('reject_request') }}" method="POST" class="d-inline">
+                        <input type="hidden" name="request_id" value="{{ req.request_id }}">
+                        <button class="btn btn-danger btn-sm mb-1">Reject</button>
+                    </form>
+                {% endif %}
             </div>
         </div>
     </div>
+    {% endfor %}
+    {% endif %}
+
+    <h4 class="mb-3 mt-4">📝 Unassigned Requests ({{ unassigned|length }})</h4>
+    {% if unassigned %}
+        {% for req in unassigned %}
+        <div class="request-item">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="badge-type">{{ req.request_type }}</span>
+                    <h5 class="mt-2">#{{ req.request_id }} - {{ req.sender_email }}</h5>
+                    <p class="text-muted small mb-0">{{ req.request_desc }}</p>
+                </div>
+                <form action="{{ url_for('claim_request') }}" method="POST">
+                    <input type="hidden" name="request_id" value="{{ req.request_id }}">
+                    <button type="submit" class="btn btn-lsu">Claim Task</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="alert alert-info">No pending requests at the moment.</div>
+    {% endif %}
 </div>
 
-<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"></script>
-<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
 <script>
     function updateTime() {
         const now = new Date();
-        const timeString = now.toLocaleString('en-US', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-        });
-        document.getElementById('current-time').innerText = timeString;
+        document.getElementById('current-time').innerText = now.toLocaleString('en-US', { hour12: false });
     }
     updateTime();
     setInterval(updateTime, 1000);
