@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Browse Categories - Nittany Auction</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+</head>
+<body style="background-color: #f8f9fa;">
+
+<nav class="navbar navbar-light bg-white shadow-sm px-4">
+    <a class="navbar-brand font-weight-bold" href="/">NittanyAuction</a>
+    <div class="ml-auto">
+        {% if session.get('email') %}
+            <a class="btn btn-outline-secondary btn-sm mr-2" href="{{ url_for('account_redirect') }}">Dashboard</a>
+            <a class="btn btn-outline-danger btn-sm" href="{{ url_for('logout') }}">Logout</a>
+        {% else %}
+            <a class="btn btn-primary btn-sm" href="{{ url_for('login') }}">Login</a>
+        {% endif %}
+    </div>
+</nav>
+
+<div class="container mt-4" style="max-width: 900px;">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+    {% endwith %}
+
+    <h2 class="mb-3">Browse Categories</h2>
+    <hr>
+
+    {% if categories %}
+        <div class="list-group">
+            {% for cat in categories %}
+                <a href="{{ url_for('category_detail', name=cat['category_name']) }}"
+                   class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                    {{ cat['category_name'] }}
+                    <span class="text-muted">&rsaquo;</span>
+                </a>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="text-muted">No categories available at this time.</p>
+    {% endif %}
+</div>
+
+<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

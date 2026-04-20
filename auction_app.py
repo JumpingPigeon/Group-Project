@@ -174,6 +174,39 @@ def categories():
         ).fetchall()
     return render_template('categories.html', categories=cats)
 
+@app.route('/categories/<path:name>')
+def category_detail(name):
+    with get_db_connection() as conn:
+        bc = build_bc(conn, name)
+        sc = conn.execute(
+            'SELECT category_name FROM Categories WHERE parent_category = ?',
+            (name,)
+        ).fetchall()
+        l = conn.execute(
+            '''
+            SELECT Seller_Email, Listing_ID, Auction_Title, Product_Name, Reserve_Price, Status
+            FROM Auction_Listings
+            WHERE Category = ?
+            ''',
+            (name,)
+        ).fetchall()
+    return render_template('category_detail.html',category_name=name,breadcrumb=bc,subcategories=sc,listings=l)
+
+@app.route('/listing/<seller_email>/<int:listing_id>')
+def listing(seller_email, listing_id):
+    with get_db_connection() as conn:
+        r = conn.execute(
+            '''
+            SELECT * FROM Auction_Listings
+            WHERE Seller_Email = ? AND Listing_ID = ?
+            ''', 
+            (seller_email, listing_id)).fetchone()
+    if r == None:
+        return "Listing not found", 404
+    return render_template('item_detail.html', listing=r)
+
+
+
 
 
 if __name__ == '__main__':
