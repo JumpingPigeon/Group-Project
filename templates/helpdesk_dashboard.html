@@ -1,45 +1,173 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HelpDesk Dashboard</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 0; background: #f6f7fb; }
-    .nav { background: #111827; color: white; padding: 14px 20px; }
-    .container { max-width: 900px; margin: 24px auto; padding: 0 16px; }
-    .card { background: white; border-radius: 12px; padding: 18px; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
-    .muted { color: #6b7280; }
-    .row { display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
-    .pill { background: #eef2ff; padding: 8px 10px; border-radius: 999px; font-size: 14px; }
-    a { color: #2563eb; text-decoration: none; }
-  </style>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>HelpDesk Dashboard - Nittany Auction</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
+    <style>
+        :root {
+            --lsu-blue: #001e44;
+            --lsu-blue-hover: #003a88;
+        }
+        body {
+            background-color: #f8f9fa;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .navbar {
+            background-color: #fff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            padding: 15px 30px;
+        }
+        .navbar-brand {
+            font-weight: 700;
+            color: var(--lsu-blue) !important;
+            font-size: 1.5rem;
+        }
+        .container {
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+        .dashboard-card {
+            width: 100%;
+            max-width: 800px;
+            padding: 40px;
+            background: #fff;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            border: none;
+        }
+        .section-title {
+            color: var(--lsu-blue);
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            border-bottom: 2px solid #f1f3f5;
+            padding-bottom: 15px;
+        }
+        .btn-lsu {
+            background-color: var(--lsu-blue);
+            color: white;
+            border-radius: 30px;
+            padding: 12px 25px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .btn-lsu:hover {
+            background-color: var(--lsu-blue-hover);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,30,68,0.2);
+        }
+        .btn-lsu.disabled {
+            background-color: #e9ecef;
+            color: #adb5bd;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .status-badge {
+            font-size: 0.85rem;
+            padding: 5px 12px;
+            border-radius: 15px;
+            background: #eef2ff;
+            color: var(--lsu-blue);
+            font-weight: 600;
+        }
+        .admin-meta {
+            color: #6b7280;
+            font-size: 0.95rem;
+        }
+    </style>
 </head>
 <body>
-  <div class="nav">
-    <strong>NittanyAuction</strong> — HelpDesk
-  </div>
 
-  <div class="container">
-    <div class="card">
-      <h2>Welcome, HelpDesk</h2>
-
-      {% if session.get('email') %}
-        <p class="muted">Logged in as: <strong>{{ session.get('email') }}</strong></p>
-      {% else %}
-        <p class="muted">You are viewing the HelpDesk dashboard.</p>
-      {% endif %}
-
-      <div class="row">
-        <div class="pill">User ID Change Requests</div>
-        <div class="pill">Seller Upgrade Requests</div>
-        <div class="pill">Category Requests</div>
-      </div>
-
-      <p style="margin-top: 14px;">
-        <a href="/">Back to Home</a>
-      </p>
+<nav class="navbar navbar-light">
+    <a class="navbar-brand" href="/">Nittany Auction</a>
+    <div class="ml-auto">
+        <a class="btn btn-outline-danger px-4" style="border-radius: 30px;" href="{{ url_for('logout') }}">Logout</a>
     </div>
-  </div>
+</nav>
+
+<div class="container">
+    <div class="dashboard-card">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="section-title mb-0" style="border:none; padding:0;">HelpDesk Portal</h2>
+            <span class="status-badge">{{ session.get('position') }}</span>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <p class="admin-meta">
+                    Welcome back, <strong>{{ session.get('first_name') }}</strong>. 
+                </p>
+                <div id="current-time" class="text-muted small font-weight-bold" style="font-family: monospace;">
+                    Loading time...
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <div class="p-3 border rounded shadow-sm">
+                    <h6>Category Management</h6>
+                    <p class="small text-muted">New Product Category Requests</p>
+                    <a href="/helpdesk_requests" class="btn btn-lsu btn-block">
+                        View Requests
+                    </a>
+                </div>
+            </div>
+
+            <div class="col-md-6 mb-3">
+                <div class="p-3 border rounded bg-light">
+                    <h6 class="text-muted">User Management</h6>
+                    <p class="small text-muted">User Role and Permissions</p>
+                    <button class="btn btn-lsu btn-block disabled">
+                        View Requests
+                    </button>
+                </div>
+            </div>
+            
+            <div class="col-md-6 mb-3">
+                <div class="p-3 border rounded bg-light">
+                    <h6 class="text-muted">Market Analysis</h6>
+                    <p class="small text-muted">Generate reports on auction trends.</p>
+                    <button class="btn btn-lsu btn-block disabled">
+                        View Analytics
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
+<script>
+    function updateTime() {
+        const now = new Date();
+        const timeString = now.toLocaleString('en-US', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        });
+        document.getElementById('current-time').innerText = timeString;
+    }
+    updateTime();
+    setInterval(updateTime, 1000);
+</script>
 </body>
 </html>
