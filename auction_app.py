@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, render_template, request, redirect, url_for, session, flash, get_flashed_messages
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps # To create reusable login_required decorator
 import sqlite3 as sql
@@ -151,7 +151,7 @@ def dashboard_endpoint(user_type):
     if user_type is None:
         return 'login'
     t = str(user_type).strip().lower()
-    if t in ('bidder', 'buyer'):
+    if t in ('bidder'):
         return 'bidder_dashboard'
     return f'{t}_dashboard'
 
@@ -163,7 +163,7 @@ def bidder_dashboard():
         return redirect(url_for('login'))
 
     role = str(session.get('user_type', '')).strip().lower()
-    if role not in ('bidder', 'buyer'):
+    if role not in ('bidder'):
         flash('Access denied.', 'danger')
         return redirect(url_for('login'))
 
@@ -178,7 +178,7 @@ def bidder_dashboard():
 @login_required
 def bidder_auctions():
     role = str(session.get('user_type', '')).strip().lower()
-    if role not in ('bidder', 'buyer'):
+    if role not in ('bidder'):
         flash('Only bidders can place bids.', 'danger')
         return redirect(url_for('login'))
 
@@ -225,7 +225,7 @@ def bidder_auctions():
 def bidder_auction_detail(seller_email, listing_id):
     role = str(session.get('user_type', '')).strip().lower()
     bidder_email = session.get('email')
-    if role not in ('bidder', 'buyer'):
+    if role not in ('bidder'):
         flash('Only bidders can place bids.', 'danger')
         return redirect(url_for('login'))
 
@@ -403,7 +403,7 @@ def bidder_auction_detail(seller_email, listing_id):
 def auction_payment(seller_email, listing_id):
     role = str(session.get('user_type', '')).strip().lower()
     bidder_email = session.get('email')
-    if role not in ('bidder', 'buyer'):
+    if role not in ('bidder'):
         flash('Only bidders can complete payment.', 'danger')
         return redirect(url_for('login'))
 
@@ -612,17 +612,9 @@ def search():
             items_list = []
             for item in items:
                 item_dict = dict(item)
-                try:
-                    # Remove currency symbols and whitespace before converting
-                    price_str = str(item_dict['Reserve_Price']).strip()
-                    # Remove currency symbols
-                    for symbol in ['$']:
-                        price_str = price_str.replace(symbol, '')
-                    item_dict['Reserve_Price'] = float(price_str) if price_str else 0.0
-                except (ValueError, TypeError):
-                    item_dict['Reserve_Price'] = 0.0
+                item_dict['Reserve_Price'] = parse_money(item_dict['Reserve_Price'])
                 items_list.append(item_dict)
-            
+                        
             # Find all watchlist items for the user in one query to avoid N+1 problem
             if user_email:
                 watchlist_items = conn.execute('''
@@ -876,6 +868,19 @@ def listing(seller_email, listing_id):
         already_r = False
         b_email = session.get("email")
         today = date.today().isoformat()
+        
+        # Check if item is in watchlist
+        in_watchlist = False
+        if b_email:
+            wl_check = conn.execute(
+                '''
+                SELECT 1 FROM Watchlist 
+                WHERE Bidder_Email = ? AND Seller_Email = ? AND Listing_ID = ?
+                ''',
+                (b_email, seller_email, listing_id)
+            ).fetchone()
+            in_watchlist = (wl_check is not None)
+
         if b_email and session.get("user_type") == "bidder":
             p = conn.execute(
                 '''
@@ -910,7 +915,8 @@ def listing(seller_email, listing_id):
         num_ratings=num_ratings,
         reviews=reviews,
         can_r=can_r,
-        already_r=already_r
+        already_r=already_r,
+        in_watchlist=in_watchlist
     )
 
 
@@ -968,9 +974,265 @@ def rate_seller(seller_email, listing_id):
     flash("Rating submitted!", "success")
     return redirect(url_for("listing", seller_email=seller_email, listing_id=listing_id))
 
+# Watchlist Functions #
+@app.route('/watchlist')
+@login_required
+def watchlist():
+    from flask import get_flashed_messages
+    get_flashed_messages()
+    
+    user_email = session.get('user_id')
+    try:
+        with get_db_connection() as conn:
+            items = conn.execute('''
+                SELECT 
+                    al.Seller_Email, 
+                    al.Listing_ID, 
+                    al.Auction_Title, 
+                    al.Product_Name, 
+                    al.Reserve_Price, 
+                    al.Max_bids, 
+                    al.Status,
+                    c.category_name as Category_Name,
+                    COALESCE((SELECT MAX(b.Bid_price) FROM Bids b WHERE b.Seller_Email = al.Seller_Email AND b.Listing_ID = al.Listing_ID), 0) as current_bid,
+                    (SELECT COUNT(*) FROM Bids b WHERE b.Seller_Email = al.Seller_Email AND b.Listing_ID = al.Listing_ID) as bid_count,
+                    COALESCE(bidder.first_name, lv.Business_Name, 'Unknown') as Seller_First_Name,
+                    COALESCE(bidder.last_name, '') as Seller_Last_Name
+                FROM Auction_Listings al
+                JOIN Watchlist w ON al.Seller_Email = w.Seller_Email AND al.Listing_ID = w.Listing_ID
+                LEFT JOIN Categories c ON al.Category = c.category_name
+                LEFT JOIN Bidders bidder ON al.Seller_Email = bidder.email
+                LEFT JOIN Local_Vendors lv ON al.Seller_Email = lv.Email
+                WHERE w.Bidder_Email = ?
+                ORDER BY al.Listing_ID DESC
+            ''', (user_email,)).fetchall()
+            
+            items_list = []
+            for item in items:
+                item_dict = dict(item)
+                item_dict['Reserve_Price'] = parse_money(item_dict['Reserve_Price'])
+                
+                try:
+                    item_dict['current_bid'] = float(item_dict['current_bid']) if item_dict['current_bid'] else 0.0
+                except (ValueError, TypeError):
+                    item_dict['current_bid'] = 0.0
+                
+                try:
+                    item_dict['bid_count'] = int(item_dict['bid_count']) if item_dict['bid_count'] else 0
+                except (ValueError, TypeError):
+                    item_dict['bid_count'] = 0
+                
+                try:
+                    item_dict['Max_bids'] = int(item_dict['Max_bids']) if item_dict['Max_bids'] else 0
+                except (ValueError, TypeError):
+                    item_dict['Max_bids'] = 0
+                
+                try:
+                    item_dict['Status'] = int(item_dict['Status']) if item_dict['Status'] else 0
+                except (ValueError, TypeError):
+                    item_dict['Status'] = 0
+                
+                items_list.append(item_dict)
+            
+        return render_template('watchlist.html', items=items_list)
+    except Exception as e:
+        flash(f'Error loading watchlist: {str(e)}', 'danger')
+        return redirect(url_for('bidder_dashboard'))
 
+@app.route('/add_watchlist', methods=['POST'])
+@login_required
+def add_watchlist():
+    user_email = session.get('user_id')
+    seller_email = request.form.get('seller_email')
+    listing_id = request.form.get('listing_id')
 
+    try:
+        with get_db_connection() as conn:
+            exists = conn.execute('''
+                SELECT 1 FROM Watchlist 
+                WHERE Bidder_Email = ? AND Seller_Email = ? AND Listing_ID = ?
+            ''', (user_email, seller_email, listing_id)).fetchone()
 
+            if not exists:
+                conn.execute('''
+                    INSERT INTO Watchlist (Bidder_Email, Seller_Email, Listing_ID)
+                    VALUES (?, ?, ?)
+                ''', (user_email, seller_email, listing_id))
+                conn.commit()
+        return redirect(request.referrer or url_for('watchlist'))
+    except Exception as e:
+        flash(f'Error adding to watchlist: {str(e)}', 'danger')
+        return redirect(url_for('bidder_dashboard'))
+
+@app.route('/remove_watchlist', methods=['POST'])
+@login_required
+def remove_watchlist():
+    user_email = session.get('user_id')
+    seller_email = request.form.get('seller_email')
+    listing_id = request.form.get('listing_id')
+    referrer = request.referrer or ''
+
+    try:
+        with get_db_connection() as conn:
+            conn.execute('''
+                DELETE FROM Watchlist 
+                WHERE Bidder_Email = ? AND Seller_Email = ? AND Listing_ID = ?
+            ''', (user_email, seller_email, listing_id))
+            conn.commit()
+            
+            if '/watchlist' in referrer:
+                flash('Removed from watchlist', 'success')
+        
+        return redirect(referrer or url_for('watchlist'))
+    except Exception as e:
+        flash(f'Error removing from watchlist: {str(e)}', 'danger')
+        return redirect(url_for('bidder_dashboard'))
+    
+# Place Bid within the Watchlist
+@app.route('/place_bid', methods=['POST'])
+@login_required
+def place_bid():
+    if session.get('user_type') not in ['bidder']:
+        flash('Only bidders can place bids.', 'danger')
+        return redirect(url_for('login'))
+
+    bidder_email = session.get('user_id')
+    seller_email = request.form.get('seller_email')
+    listing_id = request.form.get('listing_id')
+    
+    try:
+        bid_amount = float(request.form.get('bid_amount', 0))
+    except (ValueError, TypeError):
+        flash('Invalid bid amount.', 'danger')
+        return redirect(url_for('watchlist'))
+
+    if bid_amount <= 0:
+        flash('Bid amount must be positive.', 'danger')
+        return redirect(url_for('watchlist'))
+
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            auction = cursor.execute('''
+                SELECT al.Reserve_Price, al.Max_bids, al.Status,
+                       COALESCE((SELECT MAX(b.Bid_price) FROM Bids b WHERE b.Seller_Email = al.Seller_Email AND b.Listing_ID = al.Listing_ID), 0) as current_bid,
+                       (SELECT COUNT(*) FROM Bids b WHERE b.Seller_Email = al.Seller_Email AND b.Listing_ID = al.Listing_ID) as bid_count
+                FROM Auction_Listings al
+                WHERE al.Seller_Email = ? AND al.Listing_ID = ?
+            ''', (seller_email, listing_id)).fetchone()
+            
+            if not auction:
+                flash('Auction listing not found.', 'danger')
+                return redirect(url_for('watchlist'))
+            
+            current_bid = float(auction['current_bid']) if auction['current_bid'] else 0.0
+            
+            reserve_price = parse_money(auction['Reserve_Price'])
+            
+            max_bids = int(auction['Max_bids']) if auction['Max_bids'] else 0
+            bid_count = int(auction['bid_count']) if auction['bid_count'] else 0
+            status = int(auction['Status']) if auction['Status'] else 0
+            
+            if status != 1:
+                flash('This auction is not active.', 'danger')
+                return redirect(url_for('watchlist'))
+            
+            if bid_count >= max_bids:
+                flash('Maximum number of bids reached for this auction.', 'warning')
+                return redirect(url_for('watchlist'))
+            
+            if bid_amount <= current_bid:
+                flash(f'Bid must be higher than current bid (${current_bid:.2f}).', 'danger')
+                return redirect(url_for('watchlist'))
+            
+            last_bid = conn.execute('''
+                SELECT Bidder_Email FROM Bids 
+                WHERE Seller_Email = ? AND Listing_ID = ? 
+                ORDER BY Bid_ID DESC LIMIT 1
+            ''', (seller_email, listing_id)).fetchone()
+            
+            if last_bid and last_bid['Bidder_Email'] == bidder_email:
+                flash('Bid rejected: You must wait for another bidder to place a bid first.', 'warning')
+                return redirect(url_for('watchlist'))
+
+            if bidder_email == seller_email:
+                flash('Bid rejected: Sellers cannot bid on their own listings.', 'warning')
+                return redirect(url_for('watchlist'))
+            
+            cursor.execute('''
+                INSERT INTO Bids (Bidder_Email, Seller_Email, Listing_ID, Bid_price)
+                VALUES (?, ?, ?, ?)''', 
+                (bidder_email, seller_email, listing_id, bid_amount))
+            
+            conn.commit()
+            flash(f'Successfully placed bid of ${bid_amount:.2f}!', 'success')
+            
+    except Exception as e:
+        flash(f'Error placing bid: {str(e)}', 'danger')
+        import traceback
+        traceback.print_exc()
+
+    return redirect(url_for('watchlist'))
+
+@app.route('/submit_request', methods=['GET', 'POST'])
+@login_required
+def submit_request():
+    if request.method == 'GET':
+        return render_template('submit_request.html')
+    
+    request_type = request.form.get('request_type', '').strip()
+    sender_email = session.get('user_id')
+    final_desc = ""
+    
+    try:
+        if request_type == 'ChangeID':
+            new_email = request.form.get('new_email', '').strip()
+            if not new_email:
+                flash('New email is required.', 'danger')
+                return redirect(url_for('submit_request'))
+            final_desc = f"Please change my ID to {new_email}"
+            
+        elif request_type == 'SellerReg':
+            routing = request.form.get('bank_routing', '').strip()
+            account = request.form.get('bank_account', '').strip()
+            if not routing or not account:
+                flash('Bank routing and account numbers are required.', 'danger')
+                return redirect(url_for('submit_request'))
+            final_desc = f"Routing:{routing}|Account:{account}"
+            
+        elif request_type == 'AddCategory':
+            parent = request.form.get('parent_category', '').strip()
+            child = request.form.get('new_category', '').strip()
+            if not parent or not child:
+                flash('Parent and new category names are required.', 'danger')
+                return redirect(url_for('submit_request'))
+            final_desc = f"Please add a new category {child} under {parent}"
+            
+        else:
+            # MarketAnalysis or General Question
+            general_desc = request.form.get('request_desc', '').strip()
+            if not general_desc:
+                flash('Description is required for this request type.', 'danger')
+                return redirect(url_for('submit_request'))
+            final_desc = general_desc
+
+        with get_db_connection() as conn:
+            conn.execute('''
+                INSERT INTO Requests (sender_email, helpdesk_staff_email, request_type, request_desc, request_status)
+                VALUES (?, ?, ?, ?, ?)''', 
+                (sender_email, 'helpdeskteam@lsu.edu', request_type, final_desc, 0))
+            
+            conn.commit()
+            
+        flash('Your request has been submitted successfully! Helpdesk will review it soon.', 'success')
+        return redirect(url_for(f'{session.get("user_type")}_dashboard'))
+        
+    except Exception as e:
+        flash(f'Error submitting request: {str(e)}', 'danger')
+        import traceback
+        traceback.print_exc()
+        return redirect(url_for('submit_request'))
 
 if __name__ == '__main__':
     #app.run()

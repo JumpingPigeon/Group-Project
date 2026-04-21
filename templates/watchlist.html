@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>My Watchlist - Nittany Auction</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .navbar {
+            background-color: #fff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            padding: 15px 30px;
+        }
+        .navbar-brand {
+            font-weight: 700;
+            color: #001e44 !important;
+            font-size: 1.5rem;
+        }
+        .container {
+            margin-top: 30px;
+            max-width: 1100px;
+            flex-grow: 1;
+        }
+        .page-header {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            margin-bottom: 30px;
+        }
+        .watchlist-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            transition: all 0.3s ease;
+            border-left: 4px solid #001e44;
+        }
+        .watchlist-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .auction-title {
+            color: #001e44;
+            font-weight: 700;
+            font-size: 1.2rem;
+            margin-bottom: 5px;
+        }
+        .product-name {
+            color: #6b7280;
+            font-size: 0.95rem;
+            margin-bottom: 10px;
+        }
+        .price-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 18px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .current-bid {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        .reserve-price {
+            font-size: 0.85rem;
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+        .seller-info {
+            color: #6b7280;
+            font-size: 0.9rem;
+            margin-top: 10px;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .status-badge {
+            padding: 6px 14px;
+            border-radius: 15px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: inline-block;
+            margin-bottom: 10px;
+        }
+        .status-active {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status-sold {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .bid-info {
+            background: #eef2ff;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        .btn-bid-now {
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            padding: 10px 20px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        .btn-bid-now:hover {
+            background: #218838;
+            transform: scale(1.05);
+        }
+        .btn-remove {
+            border-radius: 25px;
+            padding: 8px 18px;
+        }
+        .empty-watchlist {
+            text-align: center;
+            padding: 60px 20px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-light">
+    <a class="navbar-brand" href="/">Nittany Auction</a>
+    <div class="ml-auto">
+        {% if session.get('user_id') %}
+            <span class="mr-3 text-muted">Welcome, {{ session.get('first_name') }}</span>
+            <a class="btn btn-outline-primary btn-sm px-3 mr-2" href="{{ url_for('bidder_dashboard') }}">Dashboard</a>
+            <a class="btn btn-outline-danger btn-sm" href="{{ url_for('logout') }}">Logout</a>
+        {% else %}
+            <a class="btn btn-primary px-4" href="{{ url_for('login') }}">Login/Register</a>
+        {% endif %}
+    </div>
+</nav>
+
+<div class="container">
+    <div class="page-header">
+        <h3 class="mb-2" style="color: #001e44;">⭐ My Watchlist (Shopping Cart)</h3>
+        <p class="text-muted mb-0">
+            You have <strong>{{ items|length }}</strong> item(s) saved. 
+            Track current bids and place new bids directly from here!
+        </p>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+    {% endwith %}
+
+    {% if items %}
+        {% for item in items %}
+        <div class="watchlist-card">
+            <div class="row">
+                                <div class="col-md-7">
+                    <div class="auction-title">{{ item.Auction_Title }}</div>
+                    <div class="product-name">{{ item.Product_Name }}</div>
+                    
+                    <div class="seller-info">
+                        <strong>👤 Seller:</strong> {{ item.Seller_First_Name }} {{ item.Seller_Last_Name }}
+                        <br>
+                        <small class="text-muted">{{ item.Seller_Email }}</small>
+                    </div>
+                    
+                    <div class="bid-info">
+                        <div class="row">
+                            <div class="col-6">
+                                <strong>Bids Placed:</strong><br>
+                                <span class="text-primary" style="font-size: 1.1rem;">{{ item.bid_count }}</span> / {{ item.Max_bids }}
+                            </div>
+                            <div class="col-6">
+                                <strong>Remaining Bids:</strong><br>
+                                <span class="{% if item.Max_bids - item.bid_count <= 2 %}text-danger{% else %}text-success{% endif %}" style="font-size: 1.1rem;">
+                                    {{ item.Max_bids - item.bid_count }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <a href="/listing/{{ item.Seller_Email }}/{{ item.Listing_ID }}" 
+                           class="btn btn-outline-primary btn-sm">
+                            🔍 View Details (GO)
+                        </a>
+                    </div>
+                </div>
+                
+                        <div class="col-md-5">
+                    <div class="text-right">
+                        <div class="price-section mb-3">
+                            {% if item.current_bid > 0 %}
+                                <div class="current-bid">${{ "%.2f"|format(item.current_bid) }}</div>
+                                <div class="reserve-price">Current Highest Bid</div>
+                            {% else %}
+                                <div class="current-bid">$0.00</div>
+                                <div class="reserve-price">No Bids Yet</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="mb-3">
+                            {% if item.Status == 1 and item.bid_count < item.Max_bids %}
+                                <span class="status-badge status-active">✓ Active</span>
+                            {% elif item.Status == 2 %}
+                                <span class="status-badge status-sold">💰 Sold</span>
+                            {% elif item.Status == 0 %}
+                                <span class="status-badge status-inactive">✗ Inactive</span>
+                            {% else %}
+                                <span class="status-badge status-inactive">⏱ Ended</span>
+                            {% endif %}
+                        </div>
+                        
+                        {% if item.Status == 1 and item.bid_count < item.Max_bids %}
+                            <form action="{{ url_for('place_bid') }}" method="POST" id="quickBidForm_{{ item.Seller_Email }}_{{ item.Listing_ID }}">
+                                <input type="hidden" name="seller_email" value="{{ item.Seller_Email }}">
+                                <input type="hidden" name="listing_id" value="{{ item.Listing_ID }}">
+                                <input type="hidden" name="bid_amount" value="{{ (item.current_bid + 1.00)|round(2) }}">
+                            </form>
+
+                            <button type="submit" form="quickBidForm_{{ item.Seller_Email }}_{{ item.Listing_ID }}" 
+                                    class="btn btn-bid-now btn-block mb-2">
+                                💰 Place Bid (+$1)
+                            </button>
+                        {% else %}
+                            <button class="btn btn-secondary btn-block mb-2" disabled>
+                                {% if item.Status == 2 %}
+                                    💰 Sold Out
+                                {% elif item.Status == 0 %}
+                                    ✗ Auction Failed
+                                {% else %}
+                                    ⏱ Auction Ended
+                                {% endif %}
+                            </button>
+                        {% endif %}
+                        
+                        <form action="{{ url_for('remove_watchlist') }}" method="POST">
+                            <input type="hidden" name="seller_email" value="{{ item.Seller_Email }}">
+                            <input type="hidden" name="listing_id" value="{{ item.Listing_ID }}">
+                            <button type="submit" class="btn btn-outline-danger btn-remove btn-block">
+                                🗑 Remove from Watchlist
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="empty-watchlist">
+            <h4 class="text-muted mb-3">😕 Your Watchlist is Empty</h4>
+            <p class="text-muted">Start browsing and add items you're interested in!</p>
+            <a href="/search" class="btn btn-primary mt-3">🔍 Browse Listings</a>
+        </div>
+    {% endif %}
+</div>
+
+<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
+<script>
+    setInterval(function() {
+        location.reload();
+    }, 5000);
+</script>
+</body>
+</html>

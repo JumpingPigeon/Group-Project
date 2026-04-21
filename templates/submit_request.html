@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Submit Request - Nittany Auction</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
+    <style>
+        body { background-color: #f8f9fa; min-height: 100vh; display: flex; flex-direction: column; }
+        .navbar { background-color: #fff; box-shadow: 0 2px 10px rgba(0,0,0,0.05); padding: 15px 30px; }
+        .navbar-brand { font-weight: 700; color: #001e44 !important; font-size: 1.5rem; }
+        .container { margin-top: 30px; max-width: 800px; flex-grow: 1; }
+        .form-card { background: white; border-radius: 15px; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        .form-title { color: #001e44; font-weight: 700; margin-bottom: 20px; }
+        .hidden-field { display: none; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-light">
+    <a class="navbar-brand" href="/">Nittany Auction</a>
+    <div class="ml-auto">
+        {% if session.get('user_id') %}
+            <span class="mr-3 text-muted">Welcome, {{ session.get('first_name') }}</span>
+            <a class="btn btn-outline-primary btn-sm px-3 mr-2" href="{{ url_for(session['user_type'] + '_dashboard') }}">Dashboard</a>
+            <a class="btn btn-outline-danger btn-sm" href="{{ url_for('logout') }}">Logout</a>
+        {% else %}
+            <a class="btn btn-primary px-4" href="{{ url_for('login') }}">Login/Register</a>
+        {% endif %}
+    </div>
+</nav>
+
+<div class="container">
+    <div class="form-card">
+        <h2 class="form-title">📝 Submit a Request</h2>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endwith %}
+
+        <form method="POST" id="requestForm">
+            <div class="form-group">
+                <label for="request_type"><strong>Request Type</strong></label>
+                 <select class="form-control" id="request_type" name="request_type" required onchange="toggleFields()">
+                    <option value="" disabled selected>Select a type...</option>
+                    
+                    <!-- Common for Both Bidder and Seller -->
+                    <option value="ChangeID">Change User ID / Email</option>
+                    <option value="Question">General Question / Support</option>
+
+                    <!-- Bidder Only -->
+                    {% if session.get('user_type') == 'bidder' %}
+                        <option value="SellerReg">Request to Become a Seller</option>
+                    {% endif %}
+
+                    <!-- Seller Only -->
+                    {% if session.get('user_type') == 'seller' %}
+                        <option value="AddCategory">Request to Add New Category</option>
+                        <option value="MarketAnalysis">Request Market Analysis</option>
+                    {% endif %}
+                </select>
+            </div>
+            
+            <!-- 1. Change ID Field -->
+            <div id="field_changeid" class="hidden-field">
+                <div class="form-group">
+                    <label for="new_email"><strong>New Email Address</strong></label>
+                    <input type="email" class="form-control" id="new_email" name="new_email" placeholder="Enter your new email">
+                </div>
+            </div>
+
+            <!-- 2. Become Seller Fields -->
+            <div id="field_sellerreg" class="hidden-field">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="bank_routing"><strong>Bank Routing Number</strong></label>
+                            <input type="text" class="form-control" id="bank_routing" name="bank_routing">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="bank_account"><strong>Bank Account Number</strong></label>
+                            <input type="text" class="form-control" id="bank_account" name="bank_account">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. Add Category Fields -->
+            <div id="field_addcategory" class="hidden-field">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="parent_category"><strong>Parent Category</strong></label>
+                            <input type="text" class="form-control" id="parent_category" name="parent_category" placeholder="e.g., Electronics">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="new_category"><strong>New Sub-category Name</strong></label>
+                            <input type="text" class="form-control" id="new_category" name="new_category" placeholder="e.g., Drones">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. General Description -->
+            <div id="field_description" class="form-group">
+                <label for="request_desc"><strong>Description / Details</strong></label>
+                <textarea class="form-control" id="request_desc" name="request_desc" rows="4" placeholder="Please provide details..."></textarea>
+            </div>
+
+            <div class="d-flex justify-content-between mt-4">
+                <a href="{{ url_for(session.get('user_type') + '_dashboard') }}" class="btn btn-outline-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary px-4">Submit Request</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"></script>
+<script>
+    function toggleFields() {
+        const type = document.getElementById('request_type').value;
+        
+        // Hide all first
+        document.getElementById('field_changeid').style.display = 'none';
+        document.getElementById('field_sellerreg').style.display = 'none';
+        document.getElementById('field_addcategory').style.display = 'none';
+        document.getElementById('field_description').style.display = 'block'; // Default show
+
+        // Remove required from hidden inputs to prevent validation errors
+        document.getElementById('new_email').required = false;
+        document.getElementById('bank_routing').required = false;
+        document.getElementById('bank_account').required = false;
+        document.getElementById('parent_category').required = false;
+        document.getElementById('new_category').required = false;
+        document.getElementById('request_desc').required = true;
+
+        if (type === 'ChangeID') {
+            document.getElementById('field_changeid').style.display = 'block';
+            document.getElementById('field_description').style.display = 'none'; // Hide general desc
+            document.getElementById('new_email').required = true;
+            document.getElementById('request_desc').required = false;
+        } else if (type === 'SellerReg') {
+            document.getElementById('field_sellerreg').style.display = 'block';
+            document.getElementById('field_description').style.display = 'none'; // Hide general desc for SellerReg
+            document.getElementById('bank_routing').required = true;
+            document.getElementById('bank_account').required = true;
+            document.getElementById('request_desc').required = false;
+        } else if (type === 'AddCategory') {
+            document.getElementById('field_addcategory').style.display = 'block';
+            document.getElementById('field_description').style.display = 'none'; // Hide general desc for AddCategory
+            document.getElementById('parent_category').required = true;
+            document.getElementById('new_category').required = true;
+            document.getElementById('request_desc').required = false;
+        }
+    }
+</script>
+</body>
+</html>
