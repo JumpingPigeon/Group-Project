@@ -19,7 +19,7 @@
 <div class="container">
     <div class="register-box">
         <h2 class="text-center" style="color: #001e44; font-weight: 700;">User Registration</h2>
-        <p class="text-center text-muted">Please fill in the details according to your role.</p>
+        <p class="text-center text-muted">Please fill in the details</p>
 
         <form method="POST" id="registerForm">
             <div class="section-title">Account Security</div>
@@ -34,17 +34,17 @@
                 </div>
             </div>
 
-            <div class="section-title">System Role</div>
+            <div class="section-title">User Role</div>
             <div class="form-group">
                 <label>Register As</label>
                 <select name="user_type" id="roleSelect" class="form-control" required>
                     <option value="">-- Select Role --</option>
-                    <option value="bidder">Bidder (Student Only)</option>
-                    <option value="seller">Seller (Student or Local Vendor)</option>
-                    <option value="helpdesk">Helpdesk (Internal Staff Only)</option>
+                    <option value="bidder">Bidder</option>
+                    <option value="seller">Seller</option>
+                    <option value="helpdesk">Helpdesk</option>
                 </select>
                 <div id="helpdeskWarning" class="alert alert-danger helpdesk-warning">
-                    Notice: HelpDesk accounts cannot be created externally. Please contact the administrator.
+                    Warning: HelpDesk accounts cannot be created externally. Please contact the administrator.
                 </div>
             </div>
 
@@ -52,11 +52,11 @@
                 <label>Seller Type</label>
                 <div class="custom-control custom-radio">
                     <input type="radio" id="typeStudent" name="seller_sub_type" value="student" class="custom-control-input">
-                    <label class="custom-control-label" for="typeStudent">LSU Student (Requires Bidder Info)</label>
+                    <label class="custom-control-label" for="typeStudent">Student</label>
                 </div>
                 <div class="custom-control custom-radio">
                     <input type="radio" id="typeVendor" name="seller_sub_type" value="vendor" class="custom-control-input">
-                    <label class="custom-control-label" for="typeVendor">Local Business Vendor</label>
+                    <label class="custom-control-label" for="typeVendor">Local Vendor</label>
                 </div>
             </div>
 
@@ -86,7 +86,7 @@
             </div>
 
             <div id="bankInfo" style="display:none;">
-                <div class="section-title">Bank Information (For Payouts)</div>
+                <div class="section-title">Bank Information</div>
                 <div class="row">
                     <div class="col-md-6 form-group"><label>Routing Number</label><input type="text" name="bank_routing" class="form-control"></div>
                     <div class="col-md-6 form-group"><label>Account Number</label><input type="text" name="bank_account" class="form-control"></div>
@@ -132,6 +132,7 @@
         document.getElementById('addressSection').style.display = 'none';
         submitBtn.disabled = false;
 
+        <!-- We only show certain sections based on the selected role and seller type -->
         if (role === 'helpdesk') {
             document.getElementById('helpdeskWarning').style.display = 'block';
             submitBtn.disabled = true;
@@ -155,6 +156,7 @@
 
     roleSelect.addEventListener('change', updateForm);
     sellerTypeRadios.forEach(r => r.addEventListener('change', updateForm));
+    
 </script>
 </body>
 </html>
