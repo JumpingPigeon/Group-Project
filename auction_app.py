@@ -1211,7 +1211,243 @@ def update_auction():
 
     return redirect(url_for("seller_auction", updated="1"))
 
+@app.route('/seller_profile')
+def seller_profile():
+    email = session.get("email")
+    if not email:
+        return redirect(url_for("login"))
 
+    conn = get_db_connection()
+
+    return render_template("seller_profile.html",email=email,)
+
+
+@app.route('/request_change_email', methods=['POST'])
+def request_change_email():
+    conn = get_db_connection()
+
+    try:
+        sender_email = session.get("email")
+        if not sender_email:
+            return redirect(url_for("login"))
+
+        new_email = request.form.get("new_email", "").strip()
+
+        if not new_email:
+            return redirect(url_for(f'{user_type}_profile', request_sent="0"))
+
+        if new_email == sender_email:
+            return redirect(url_for(f'{user_type}_profile', request_sent="same"))
+
+        # generate max id+1
+        row = conn.execute("""
+            SELECT MAX(request_id) FROM Requests
+        """).fetchone()
+
+        # if empty table start from 1
+        max_id = row[0] if row[0] is not None else 0
+        request_id = max_id + 1
+
+        helpdesk_email = "helpdeskteam@lsu.edu"
+        request_type = "ChangeID"
+        request_desc = f"Please change my ID from {sender_email} to {new_email}."
+        request_status = 0
+
+        conn.execute("""
+            INSERT INTO Requests (
+                request_id,
+                sender_email,
+                helpdesk_staff_email,
+                request_type,
+                request_desc,
+                request_status
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            request_id,
+            sender_email,
+            helpdesk_email,
+            request_type,
+            request_desc,
+            request_status
+        ))
+
+        conn.commit()
+
+        # redirect back to profile
+        return redirect(url_for(f'{user_type}_profile', request_sent="1"))
+
+    finally:
+        conn.close()
+
+#this update password
+@app.route('/update_password', methods=['POST'])
+def update_profile():
+    conn = get_db_connection()
+
+    try:
+        user_type = session.get('user_type')
+        email = session.get("email")
+        if not email:
+            return redirect(url_for("login"))
+        user_type = session.get('user_type')
+        new_password = request.form.get("password", "").strip()
+
+        # if no new password do not update
+        if not new_password:
+            return redirect(url_for(f'{user_type}_profile', updated="0"))
+
+        # hash password
+        hashed_password = generate_password_hash(new_password)
+
+        # update database
+        conn.execute("""
+            UPDATE Users
+            SET password = ?
+            WHERE email = ?
+        """, (hashed_password, email))
+
+        conn.commit()
+
+        return redirect(url_for(f'{user_type}_profile', request_sent="1"))
+    finally:
+        conn.close()
+
+
+# This update bank account information of seller
+@app.route('/update_bank_info', methods=['POST'])
+def update_bank_info():
+        conn = get_db_connection()
+
+        try:
+            email = session.get("email")
+            user_type = session.get("user_type")
+
+            if not email:
+                return redirect(url_for("login"))
+
+            routing = request.form.get("routing", "").strip()
+            account = request.form.get("account", "").strip()
+
+
+            if routing and account:
+                conn.execute("""
+                    UPDATE Sellers
+                    SET bank_routing_number = ?,
+                        bank_account_number = ?
+                    WHERE email = ?
+                """, (routing, account, email))
+            elif routing:
+                conn.execute("""
+                    UPDATE Sellers
+                    SET bank_routing_number = ?,
+                    WHERE email = ?
+                """, (routing, email))
+            elif account:
+                conn.execute("""
+                    UPDATE Sellers
+                    SET bank_account_number = ?
+                    WHERE email = ?
+                """, (account, email))
+            else:
+                return redirect(url_for(f'{user_type}_profile', bank_updated="invalid"))
+
+
+            conn.commit()
+
+            return redirect(url_for(f'{user_type}_profile', bank_updated="1"))
+
+        finally:
+            conn.close()
+
+@app.route('/bidder_profile')
+def bidder_profile():
+    email = session.get("email")
+    if not email:
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+
+    try:
+        bidder = conn.execute("""
+            SELECT 
+                B.email,
+                B.first_name,
+                B.last_name,
+                B.major,
+                B.home_address_id,
+                A.street_num,
+                A.street_name,
+                A.zipcode
+            FROM Bidders B
+            LEFT JOIN Address A
+                ON B.home_address_id = A.address_id
+            WHERE B.email = ?
+        """, (email,)).fetchone()
+
+        if not bidder:
+            return redirect(url_for("login"))
+
+        return render_template("bidder_profile.html", bidder=bidder)
+    finally:
+        conn.close()    
+
+# THis part update bidder profile
+@app.route('/update_bidder_profile', methods=['POST'])
+def update_bidder_profile():
+    email = session.get("email")
+    if not email:
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+
+    try:
+        first_name = request.form.get("first_name", "").strip()
+        last_name = request.form.get("last_name", "").strip()
+        major = request.form.get("major", "").strip()
+        street_num = request.form.get("street_num", type=int)
+        street_name = request.form.get("street_name", "").strip()
+        zipcode = request.form.get("zipcode", type=int)
+
+        if not first_name or not last_name or not major or not street_name:
+            return redirect(url_for("bidder_profile", updated="0"))
+
+        if street_num is None or zipcode is None:
+            return redirect(url_for("bidder_profile", updated="0"))
+
+        bidder = conn.execute("""
+            SELECT home_address_id
+            FROM Bidders
+            WHERE email = ?
+        """, (email,)).fetchone()
+
+        if not bidder:
+            return redirect(url_for("login"))
+
+        address_id = bidder["home_address_id"]
+
+        conn.execute("""
+            UPDATE Bidders
+            SET first_name = ?,
+                last_name = ?,
+                major = ?
+            WHERE email = ?
+        """, (first_name, last_name, major, email))
+
+        conn.execute("""
+            UPDATE Address
+            SET street_num = ?,
+                street_name = ?,
+                zipcode = ?
+            WHERE address_id = ?
+        """, (street_num, street_name, zipcode, address_id))
+
+        conn.commit()
+
+        return redirect(url_for("bidder_profile", updated="1"))
+
+    finally:
+        conn.close()
 
 
 if __name__ == '__main__':
