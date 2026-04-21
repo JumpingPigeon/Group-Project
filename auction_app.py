@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps # To create reusable login_required decorator
 import sqlite3 as sql
-from datetime import date
+from datetime import date, datetime
 
 app = Flask(__name__)
 app.secret_key = "dev_key"
@@ -14,6 +14,18 @@ def get_db_connection():
     conn = sql.connect(database)
     conn.row_factory = sql.Row
     return conn
+
+
+def parse_money(value):
+    if value is None:
+        return 0.0
+    cleaned = str(value).replace("$", "").replace(",", "").strip()
+    if cleaned == "":
+        return 0.0
+    try:
+        return float(cleaned)
+    except ValueError:
+        return 0.0
 
 def build_bc(conn, c_name):
     bc = []
@@ -160,6 +172,309 @@ def bidder_dashboard():
         email=session.get('email'),
         first_name=session.get('first_name')
     )
+
+
+@app.route('/bidder/auctions')
+@login_required
+def bidder_auctions():
+    role = str(session.get('user_type', '')).strip().lower()
+    if role not in ('bidder', 'buyer'):
+        flash('Only bidders can place bids.', 'danger')
+        return redirect(url_for('login'))
+
+    with get_db_connection() as conn:
+        listings = conn.execute(
+            '''
+            SELECT Seller_Email, Listing_ID, Category, Auction_Title, Product_Name,
+                   Product_Description, Max_bids, Status
+            FROM Auction_Listings
+            WHERE Status = 1
+            ORDER BY Listing_ID DESC
+            '''
+        ).fetchall()
+
+        listing_dicts = []
+        for listing in listings:
+            bid_stats = conn.execute(
+                '''
+                SELECT COUNT(*) AS bid_count, MAX(Bid_Price) AS highest_bid
+                FROM Bids
+                WHERE Seller_Email = ? AND Listing_ID = ?
+                ''',
+                (listing['Seller_Email'], listing['Listing_ID'])
+            ).fetchone()
+            bid_count = int(bid_stats['bid_count'] or 0)
+            remaining_bids = max(int(listing['Max_bids']) - bid_count, 0)
+            listing_dicts.append({
+                'seller_email': listing['Seller_Email'],
+                'listing_id': listing['Listing_ID'],
+                'category': listing['Category'],
+                'auction_title': listing['Auction_Title'],
+                'product_name': listing['Product_Name'],
+                'product_description': listing['Product_Description'],
+                'highest_bid': float(bid_stats['highest_bid'] or 0),
+                'max_bids': int(listing['Max_bids']),
+                'remaining_bids': remaining_bids
+            })
+
+    return render_template('active_listings.html', listings=listing_dicts)
+
+
+@app.route('/bidder/auction/<seller_email>/<int:listing_id>', methods=['GET', 'POST'])
+@login_required
+def bidder_auction_detail(seller_email, listing_id):
+    role = str(session.get('user_type', '')).strip().lower()
+    bidder_email = session.get('email')
+    if role not in ('bidder', 'buyer'):
+        flash('Only bidders can place bids.', 'danger')
+        return redirect(url_for('login'))
+
+    with get_db_connection() as conn:
+        listing = conn.execute(
+            '''
+            SELECT Seller_Email, Listing_ID, Category, Auction_Title, Product_Name,
+                   Product_Description, Reserve_Price, Max_bids, Status
+            FROM Auction_Listings
+            WHERE Seller_Email = ? AND Listing_ID = ?
+            ''',
+            (seller_email, listing_id)
+        ).fetchone()
+
+        if not listing:
+            flash('Auction listing not found.', 'danger')
+            return redirect(url_for('bidder_auctions'))
+
+        bid_stats = conn.execute(
+            '''
+            SELECT COUNT(*) AS bid_count, MAX(Bid_Price) AS highest_bid
+            FROM Bids
+            WHERE Seller_Email = ? AND Listing_ID = ?
+            ''',
+            (seller_email, listing_id)
+        ).fetchone()
+
+        bid_count = int(bid_stats['bid_count'] or 0)
+        highest_bid = float(bid_stats['highest_bid'] or 0)
+        max_bids = int(listing['Max_bids'])
+        remaining_bids = max(max_bids - bid_count, 0)
+        reserve_price = parse_money(listing['Reserve_Price'])
+
+        recent_bids = conn.execute(
+            '''
+            SELECT Bid_ID, Bidder_Email, Bid_Price
+            FROM Bids
+            WHERE Seller_Email = ? AND Listing_ID = ?
+            ORDER BY Bid_ID DESC
+            LIMIT 10
+            ''',
+            (seller_email, listing_id)
+        ).fetchall()
+
+        last_bid = conn.execute(
+            '''
+            SELECT Bidder_Email
+            FROM Bids
+            WHERE Seller_Email = ? AND Listing_ID = ?
+            ORDER BY Bid_ID DESC
+            LIMIT 1
+            ''',
+            (seller_email, listing_id)
+        ).fetchone()
+
+        winner = conn.execute(
+            '''
+            SELECT Bidder_Email, Bid_Price
+            FROM Bids
+            WHERE Seller_Email = ? AND Listing_ID = ?
+            ORDER BY Bid_Price DESC, Bid_ID DESC
+            LIMIT 1
+            ''',
+            (seller_email, listing_id)
+        ).fetchone()
+
+        can_place_bid = (int(listing['Status']) == 1 and remaining_bids > 0)
+
+        if request.method == 'POST':
+            bid_raw = request.form.get('bid_price', '').strip()
+            try:
+                bid_price = float(bid_raw)
+            except ValueError:
+                flash('Invalid bid amount.', 'danger')
+                return redirect(url_for('bidder_auction_detail', seller_email=seller_email, listing_id=listing_id))
+
+            if int(listing['Status']) != 1 or remaining_bids <= 0:
+                flash('Bid rejected: auction ended.', 'warning')
+                return redirect(url_for('bidder_auction_detail', seller_email=seller_email, listing_id=listing_id))
+
+            if bid_price < highest_bid + 1:
+                flash(f'Bid rejected: bid must be at least ${highest_bid + 1:.2f}.', 'warning')
+                return redirect(url_for('bidder_auction_detail', seller_email=seller_email, listing_id=listing_id))
+
+            if last_bid and last_bid['Bidder_Email'] == bidder_email:
+                flash('Bid rejected: you must wait for another bidder.', 'warning')
+                return redirect(url_for('bidder_auction_detail', seller_email=seller_email, listing_id=listing_id))
+
+            if bidder_email == seller_email:
+                flash('Bid rejected: seller cannot bid on own listing.', 'warning')
+                return redirect(url_for('bidder_auction_detail', seller_email=seller_email, listing_id=listing_id))
+
+            next_bid_id = conn.execute('SELECT COALESCE(MAX(Bid_ID), 0) + 1 FROM Bids').fetchone()[0]
+            conn.execute(
+                '''
+                INSERT INTO Bids (Bid_ID, Seller_Email, Listing_ID, Bidder_Email, Bid_Price)
+                VALUES (?, ?, ?, ?, ?)
+                ''',
+                (next_bid_id, seller_email, listing_id, bidder_email, bid_price)
+            )
+
+            updated_stats = conn.execute(
+                '''
+                SELECT COUNT(*) AS bid_count, MAX(Bid_Price) AS highest_bid
+                FROM Bids
+                WHERE Seller_Email = ? AND Listing_ID = ?
+                ''',
+                (seller_email, listing_id)
+            ).fetchone()
+
+            updated_bid_count = int(updated_stats['bid_count'] or 0)
+            updated_highest_bid = float(updated_stats['highest_bid'] or 0)
+
+            if updated_bid_count >= max_bids:
+                if updated_highest_bid >= reserve_price:
+                    conn.execute(
+                        '''
+                        UPDATE Auction_Listings
+                        SET Status = 2
+                        WHERE Seller_Email = ? AND Listing_ID = ?
+                        ''',
+                        (seller_email, listing_id)
+                    )
+                    conn.commit()
+
+                    winning_bid = conn.execute(
+                        '''
+                        SELECT Bidder_Email, Bid_Price
+                        FROM Bids
+                        WHERE Seller_Email = ? AND Listing_ID = ?
+                        ORDER BY Bid_Price DESC, Bid_ID DESC
+                        LIMIT 1
+                        ''',
+                        (seller_email, listing_id)
+                    ).fetchone()
+
+                    if winning_bid and winning_bid['Bidder_Email'] == bidder_email:
+                        flash('Bid accepted. Auction ended and you won. Please complete payment.', 'success')
+                        return redirect(url_for('auction_payment', seller_email=seller_email, listing_id=listing_id))
+
+                    flash('Bid accepted. Auction ended.', 'success')
+                    return redirect(url_for('bidder_auction_detail', seller_email=seller_email, listing_id=listing_id))
+
+                conn.execute(
+                    '''
+                    UPDATE Auction_Listings
+                    SET Status = 0
+                    WHERE Seller_Email = ? AND Listing_ID = ?
+                    ''',
+                    (seller_email, listing_id)
+                )
+                conn.commit()
+                flash('Bid accepted. Auction ended but reserve price not met.', 'warning')
+                return redirect(url_for('bidder_auction_detail', seller_email=seller_email, listing_id=listing_id))
+
+            conn.commit()
+            flash('Bid accepted.', 'success')
+            return redirect(url_for('bidder_auction_detail', seller_email=seller_email, listing_id=listing_id))
+
+        is_winner = bool(winner and winner['Bidder_Email'] == bidder_email and int(listing['Status']) == 2)
+        return render_template(
+            'item_detail.html',
+            listing=listing,
+            recent_bids=recent_bids,
+            bid_count=bid_count,
+            highest_bid=highest_bid,
+            remaining_bids=remaining_bids,
+            can_place_bid=can_place_bid,
+            is_winner=is_winner
+        )
+
+
+@app.route('/bidder/auction/<seller_email>/<int:listing_id>/payment', methods=['GET', 'POST'])
+@login_required
+def auction_payment(seller_email, listing_id):
+    role = str(session.get('user_type', '')).strip().lower()
+    bidder_email = session.get('email')
+    if role not in ('bidder', 'buyer'):
+        flash('Only bidders can complete payment.', 'danger')
+        return redirect(url_for('login'))
+
+    with get_db_connection() as conn:
+        listing = conn.execute(
+            '''
+            SELECT Seller_Email, Listing_ID, Auction_Title, Product_Name, Status
+            FROM Auction_Listings
+            WHERE Seller_Email = ? AND Listing_ID = ?
+            ''',
+            (seller_email, listing_id)
+        ).fetchone()
+        if not listing:
+            flash('Auction listing not found.', 'danger')
+            return redirect(url_for('bidder_auctions'))
+
+        winning_bid = conn.execute(
+            '''
+            SELECT Bidder_Email, Bid_Price
+            FROM Bids
+            WHERE Seller_Email = ? AND Listing_ID = ?
+            ORDER BY Bid_Price DESC, Bid_ID DESC
+            LIMIT 1
+            ''',
+            (seller_email, listing_id)
+        ).fetchone()
+
+        if not winning_bid or winning_bid['Bidder_Email'] != bidder_email:
+            flash('Only the winning bidder can access payment.', 'danger')
+            return redirect(url_for('bidder_auction_detail', seller_email=seller_email, listing_id=listing_id))
+
+        existing_txn = conn.execute(
+            '''
+            SELECT Transaction_ID
+            FROM Transactions
+            WHERE Seller_Email = ? AND Listing_ID = ? AND Bidder_Email = ?
+            LIMIT 1
+            ''',
+            (seller_email, listing_id, bidder_email)
+        ).fetchone()
+
+        if request.method == 'POST':
+            if existing_txn:
+                flash('Payment already recorded.', 'info')
+                return redirect(url_for('bidder_auction_detail', seller_email=seller_email, listing_id=listing_id))
+
+            next_txn_id = conn.execute('SELECT COALESCE(MAX(Transaction_ID), 0) + 1 FROM Transactions').fetchone()[0]
+            conn.execute(
+                '''
+                INSERT INTO Transactions (Transaction_ID, Seller_Email, Listing_ID, Bidder_Email, Date, Payment)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ''',
+                (
+                    next_txn_id,
+                    seller_email,
+                    listing_id,
+                    bidder_email,
+                    datetime.now().strftime('%m/%d/%y'),
+                    float(winning_bid['Bid_Price'])
+                )
+            )
+            conn.commit()
+            flash('Payment completed and transaction recorded.', 'success')
+            return redirect(url_for('bidder_auction_detail', seller_email=seller_email, listing_id=listing_id))
+
+        return render_template(
+            'payment.html',
+            listing=listing,
+            winning_bid=float(winning_bid['Bid_Price']),
+            payment_done=bool(existing_txn)
+        )
 
 @app.route("/helpdesk_dashboard")
 def helpdesk_dashboard():
