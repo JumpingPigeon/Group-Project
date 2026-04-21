@@ -783,7 +783,7 @@ def category_detail(name):
             ''',
             (name,)
         ).fetchall()
-    return render_template('categories.html',category_name=name,breadcrumb=bc,subcategories=sc,listings=l)
+    return render_template('category_detail.html', category_name=name, breadcrumb=bc, subcategories=sc, listings=l)
 
 @app.route('/listing/<seller_email>/<int:listing_id>')
 def listing(seller_email, listing_id):

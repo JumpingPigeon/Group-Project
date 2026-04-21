@@ -275,41 +275,44 @@
             <h5 class="mt-4 mb-3">Recent Reviews</h5>
             {% if reviews and reviews|length > 0 %}
                 {% for r in reviews %}
-                <div class="review-item">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <strong class="text-warning">{{ r['Rating'] }}/5</strong>
-                            <span class="text-muted ml-2">— {{ r['Rating_Desc'] }}</span>
-                        </div>
-                        <small class="text-muted">{{ r['Bidder_Email'] }}, {{ r['Date'] }}</small>
-                    </div>
-                </div>
+                <li>
+                    <strong>{{ r['Rating'] }}/5</strong> — {{ r['Rating_Desc'] }}
+                    <span class="muted"> ({{ r['Bidder_email'] }}, {{ r['Date'] }})</span>
+                </li>
                 {% endfor %}
             {% else %}
                 <p class="text-muted">No reviews yet.</p>
             {% endif %}
-            
-            {% if can_review and not already_review %}
-                <hr class="my-4">
-                <h5 class="mb-3">Rate this seller</h5>
-                <form method="POST" action="{{ url_for('rate_seller', seller_email=listing['Seller_Email'], listing_id=listing['Listing_ID']) }}">
-                    <div class="form-group">
-                        <label for="rating"><strong>Rating (1–5)</strong></label>
-                        <select id="rating" name="rating" class="form-control" required style="max-width: 200px;">
-                            <option value="5">5 - Excellent</option>
-                            <option value="4">4 - Good</option>
-                            <option value="3">3 - Average</option>
-                            <option value="2">2 - Poor</option>
-                            <option value="1">1 - Very Poor</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="rating_desc"><strong>Comment (optional)</strong></label>
-                        <textarea id="rating_desc" name="rating_desc" class="form-control" rows="3" maxlength="255" placeholder="Share your experience..."></textarea>
-                    </div>
-                    
-                    <button type="submit" class="btn btn-primary">Submit Rating</button>
+
+            {% if can_r and not already_r %}
+            <h4>Rate this seller</h4>
+            <form method="POST" action="{{ url_for('rate_seller', seller_email=listing['Seller_Email'], listing_id=listing['Listing_ID']) }}">
+                <label for="rating">Rating (1–5)</label><br>
+                <select id="rating" name="rating" required>
+                <option value="5">5</option>
+                <option value="4">4</option>
+                <option value="3">3</option>
+                <option value="2">2</option>
+                <option value="1">1</option>
+                </select>
+                <br><br>
+
+                <label for="rating_desc">Comment (optional)</label><br>
+                <input id="rating_desc" name="rating_desc" maxlength="255" style="width: 100%; padding: 8px;">
+                <br><br>
+
+                <button type="submit">Submit Rating</button>
+            </form>
+            {% elif already_r %}
+            <p class="muted">You already rated this seller today.</p>
+            {% endif %}
+        <div class="card">
+            <h3>Place a Bid</h3>
+            {% if can_place_bid %}
+                <form method="POST">
+                    <label for="bid_price">Bid price</label><br>
+                    <input id="bid_price" name="bid_price" type="number" step="0.01" min="0" required>
+                    <button type="submit">Submit Bid</button>
                 </form>
             {% elif already_r %}
                 <p class="text-muted mt-3">You already rated this seller today.</p>
