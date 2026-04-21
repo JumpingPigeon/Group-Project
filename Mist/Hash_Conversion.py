@@ -11,6 +11,9 @@ def hash_existing_passwords():
     print(f"Converting {len(users)} users...")
 
     for email, plain_password in users:
+        if plain_password.startswith('scrypt:') or plain_password.startswith('pbkdf2:'):
+            continue
+        
         hashed_password = generate_password_hash(plain_password)
         
         cursor.execute(
