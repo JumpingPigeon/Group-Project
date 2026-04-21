@@ -8,11 +8,29 @@
     <style>
         body {
             background-color: #f8f9fa;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        .navbar {
+            background-color: #fff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            padding: 15px 30px;
+            width: 100%;
+            z-index: 1000;
+        }
+        .navbar-brand {
+            font-weight: 700;
+            color: #001e44 !important;
+            font-size: 1.5rem;
+        }
+        .main-content {
+            flex: 1;
             display: flex;
             align-items: center;
             justify-content: center;
-            min-height: 100vh;
-            margin: 0;
+            padding: 20px;
         }
         .login-card {
             max-width: 450px;
@@ -33,47 +51,57 @@
 </head>
 <body>
 
-<div class="login-card">
-    <h2 class="text-center mb-2">Nittany Auction Account Login</h2>
+<nav class="navbar navbar-light">
+    <a class="navbar-brand" href="/">Nittany Auction</a>
+</nav>
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="alert alert-{{ category }} flash-message" role="alert">
-                    {{ message }}
-                </div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
+<div class="main-content">
+    <div class="login-card">
+        <h2 class="text-center mb-4" style="color: #001e44; font-weight: 700;">Hello! 😊😊😊</h2>
 
-    <form method="POST" action="{{ url_for('login') }}" id="login_form">
-        <div class="form-group">
-            <label for="email">Email Address</label>
-            <input type="email" class="form-control" id="email" name="email" required placeholder="Enter your email">
-        </div>
-        <div class="form-group">
-            <label for="password">Password</label>
-            <input type="password" class="form-control" id="password" name="password" required placeholder="Enter your password">
-        </div>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} flash-message" role="alert">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
 
-        <div class="mt-4">
-            <button type="submit" class="btn btn-primary px-4">
-                Sign In
-            </button>
-            <a class="btn btn-success px-4 ml-2" href="{{ url_for('register') }}" role="button">Register</a>
-        </div>
-    </form>
+        <form method="POST" action="{{ url_for('login') }}" id="login_form">
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" class="form-control" id="email" name="email" required placeholder="Enter your email">
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" class="form-control" id="password" name="password" required placeholder="Enter your password">
+            </div>
+
+            <div class="form-group">
+                <label for="role">Login As</label>
+                <select class="form-control" id="role" name="role" required>
+                    <option value="bidder">Bidder</option>
+                    <option value="seller">Seller</option>
+                    <option value="helpdesk">HelpDesk Staff</option>
+                </select>
+            </div>
+
+            <div class="mt-4 d-flex justify-content-between">
+                <button type="submit" class="btn btn-primary px-4 flex-grow-1 mr-2">
+                    Sign In
+                </button>
+                <a class="btn btn-outline-secondary px-4 ml-2 flex-grow-1" href="{{ url_for('register') }}" role="button">Register</a>
+            </div>
+        </form>
+    </div>
 </div>
 
-<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"
-        integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n"
-        crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"
-        integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo"
-        crossorigin="anonymous"></script>
-<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"
-        integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6"
-        crossorigin="anonymous"></script>
+<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
         
 </body>
 </html>

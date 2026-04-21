@@ -60,6 +60,11 @@
     <div class="ml-auto">
         {% if session.get('user_id') %}
             <span class="mr-3 text-muted">Welcome, {{ session.get('first_name') }}</span>
+            
+            <a class="btn btn-info btn-sm px-3 mr-2" href="{{ url_for(session['user_type'] + '_dashboard') }}">
+                Dashboard
+            </a>
+            
             <a class="btn btn-outline-danger btn-sm" href="{{ url_for('logout') }}">Logout</a>
         {% else %}
             <a class="btn btn-primary px-4" href="{{ url_for('login') }}">Login/Register</a>
@@ -67,17 +72,34 @@
     </div>
 </nav>
 
+
 <div class="search-container">
     <div class="search-box">
         <h2 class="text-center mb-4" style="color: #001e44;">Find Your Item</h2>
         <form action="/search" method="GET">
-            <div class="input-group">
-                <input type="text" name="q" class="form-control form-control-lg" placeholder="Search for items, categories, or sellers..." required>
-                <div class="input-group-append">
-                    <button class="btn btn-primary btn-search" type="submit">Search</button>
+            <div class="form-group mb-3">
+                <input type="text" name="q" class="form-control form-control-lg" 
+                       placeholder="Search for items, categories, or sellers..." required>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <input type="number" name="min_price" class="form-control" 
+                           placeholder="Minimum Price ($)" step="0.01" min="0">
+                </div>
+                <div class="col-md-6">
+                    <input type="number" name="max_price" class="form-control" 
+                           placeholder="Maximum Price ($)" step="0.01" min="0" max="9999999999999">
                 </div>
             </div>
+            
+            <button class="btn btn-primary btn-search btn-block" type="submit">
+                🔍 Search Products
+            </button>
         </form>
+        <p class="text-center text-muted mt-3" style="font-size: 0.9rem;">
+            Search by: Product Name / Title / Description / Category / Seller
+        </p>
     </div>
 </div>
 
