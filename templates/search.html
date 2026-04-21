@@ -153,6 +153,13 @@
     <div class="ml-auto">
         {% if session.get('user_id') %}
             <span class="mr-3 text-muted">Welcome, {{ session.get('first_name') }}</span>
+            
+            {% if session.get('user_type') in ['bidder'] %}
+                <a class="btn btn-warning btn-sm px-3 mr-2" href="{{ url_for('watchlist') }}">
+                    ⭐ Watchlist
+                </a>
+            {% endif %}
+            
             <a class="btn btn-outline-primary btn-sm px-3 mr-2" href="{{ url_for(session['user_type'] + '_dashboard') }}">Dashboard</a>
             <a class="btn btn-outline-danger btn-sm" href="{{ url_for('logout') }}">Logout</a>
         {% else %}
@@ -240,7 +247,7 @@
                     {% endif %}
                     
                     <div class="card-actions">
-                        {% if session.get('user_type') in ['bidder', 'buyer'] %}
+                        {% if session.get('user_type') in ['bidder'] %}
                             {% if item.Status == 1 and item.bid_count < item.Max_bids %}
                                 <a href="/listing/{{ item.Seller_Email }}/{{ item.Listing_ID }}" 
                                    class="btn btn-success btn-sm btn-block mb-2">View & Bid</a>

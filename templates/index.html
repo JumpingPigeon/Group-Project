@@ -61,6 +61,12 @@
         {% if session.get('user_id') %}
             <span class="mr-3 text-muted">Welcome, {{ session.get('first_name') }}</span>
             
+            {% if session.get('user_type') in ['bidder'] %}
+                <a class="btn btn-warning btn-sm px-3 mr-2" href="{{ url_for('watchlist') }}">
+                    ⭐ Watchlist
+                </a>
+            {% endif %}
+            
             <a class="btn btn-info btn-sm px-3 mr-2" href="{{ url_for(session['user_type'] + '_dashboard') }}">
                 Dashboard
             </a>
