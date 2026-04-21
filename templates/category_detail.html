@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ category_name }} - Nittany Auction</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+</head>
+<body style="background-color: #f8f9fa;">
+
+<nav class="navbar navbar-light bg-white shadow-sm px-4">
+    <a class="navbar-brand font-weight-bold" href="/">NittanyAuction</a>
+    <div class="ml-auto">
+        {% if session.get('email') %}
+            <a class="btn btn-outline-secondary btn-sm mr-2" href="{{ url_for('account_redirect') }}">Dashboard</a>
+            <a class="btn btn-outline-danger btn-sm" href="{{ url_for('logout') }}">Logout</a>
+        {% else %}
+            <a class="btn btn-primary btn-sm" href="{{ url_for('login') }}">Login</a>
+        {% endif %}
+    </div>
+</nav>
+
+<div class="container mt-4" style="max-width: 900px;">
+
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb bg-white shadow-sm px-3 py-2 rounded">
+            {% for label, link in breadcrumb %}
+                <li class="breadcrumb-item"><a href="{{ link }}">{{ label }}</a></li>
+            {% endfor %}
+            <li class="breadcrumb-item active" aria-current="page">{{ category_name }}</li>
+        </ol>
+    </nav>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+    {% endwith %}
+
+    <h2 class="mb-3">{{ category_name }}</h2>
+
+    {% if subcategories %}
+        <h5 class="mt-4">Subcategories</h5>
+        <div class="list-group mb-4">
+            {% for sub in subcategories %}
+                <a href="{{ url_for('category_detail', name=sub['category_name']) }}"
+                   class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                    {{ sub['category_name'] }}
+                    <span class="text-muted">&rsaquo;</span>
+                </a>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <h5 class="mt-2">Listings in "{{ category_name }}"</h5>
+    {% if listings %}
+        <div class="row">
+            {% for item in listings %}
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100 shadow-sm">
+                        <div class="card-body d-flex flex-column">
+                            <h6 class="card-title">{{ item['Auction_Title'] }}</h6>
+                            <p class="card-text text-muted small mb-1">{{ item['Product_Name'] }}</p>
+                            <p class="card-text mb-3"><strong>{{ item['Reserve_Price'] }}</strong></p>
+                            <a href="{{ url_for('listing', seller_email=item['Seller_Email'], listing_id=item['Listing_ID']) }}"
+                               class="btn btn-sm btn-primary mt-auto">View Details</a>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="text-muted">No listings in this category yet.</p>
+    {% endif %}
+
+</div>
+
+<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

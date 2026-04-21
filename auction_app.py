@@ -228,6 +228,49 @@ def listing(seller_email, listing_id):
                 LIMIT 10
                 ''',
                 (seller_email,)).fetchall()
+        
+
+        #test
+        # recent bids
+        rb = conn.execute(
+            '''
+            SELECT Bid_ID, Bidder_Email, Bid_Price
+            FROM Bids
+            WHERE Seller_Email = ? AND Listing_ID = ?
+            ORDER BY Bid_ID DESC
+            LIMIT 10
+            ''',
+            (seller_email, listing_id)).fetchall()
+
+        # count + highest bid
+        row = conn.execute(
+            '''
+            SELECT COUNT(*) AS bid_count, MAX(Bid_Price) AS highest_bid
+            FROM Bids
+            WHERE Seller_Email = ? AND Listing_ID = ?
+            ''',
+            (seller_email, listing_id)).fetchone()
+
+        if row:
+            bid_count = row["bid_count"]
+            if row["highest_bid"] != None:
+                highest_bid = row["highest_bid"]
+            else:
+                highest_bid = 0.0
+        else:
+            bid_count = 0
+            highest_bid = 0.0
+        max_bids = int(r["Max_bids"] or 0)
+        remaining_bids = max_bids - int(bid_count)
+        if remaining_bids < 0:
+            remaining_bids = 0
+        if r["Status"] == 1 and remaining_bids > 0:
+            can_place_bid = True
+        else:
+            can_place_bid = False
+        #test
+        
+        
         #eligibility + duplicate today
         can_r = False
         already_r = False
@@ -257,12 +300,19 @@ def listing(seller_email, listing_id):
     return render_template(
         'item_detail.html',
         listing=r,
+        highest_bid=highest_bid,
+        bid_count=bid_count,
+        remaining_bids=remaining_bids,
+        can_place_bid=can_place_bid,
+        is_winner=False,
+        recent_bids=rb,
         avg_rating=avg_rating,
         num_ratings=num_ratings,
         reviews=reviews,
         can_r=can_r,
         already_r=already_r
     )
+
 
 @app.route('/rate/<seller_email>/<int:listing_id>', methods=['POST'])
 def rate_seller(seller_email, listing_id):
@@ -272,6 +322,7 @@ def rate_seller(seller_email, listing_id):
 
     bidder_email = session["email"]
     today = date.today().isoformat()
+    rating_val = request.form.get("rating", "").strip()
     try:
         rating_val = int(rating_val)
     except:
