@@ -931,6 +931,285 @@ def rate_seller(seller_email, listing_id):
     flash("Rating submitted!", "success")
     return redirect(url_for("listing", seller_email=seller_email, listing_id=listing_id))
 
+# route for page seller_auction.html
+@app.route('/seller_auction')
+def seller_auction():
+    conn = get_db_connection()
+    if not session.get("email"):
+        return redirect(url_for("login"))
+
+    #
+    # this part is for create auction
+    # Get category selections (fetch all categories)
+    email = session.get("email")
+    categories = conn.execute("""
+    SELECT category_name FROM Categories 
+    """).fetchall()
+
+    active_listings = conn.execute("""
+    SELECT * FROM Auction_Listings
+    WHERE Seller_Email = ? AND Status = 1
+""", (email,)).fetchall()
+
+    inactive_listings = conn.execute("""
+        SELECT * FROM Auction_Listings
+        WHERE Seller_Email = ? AND Status = 0
+    """, (email,)).fetchall()
+
+    sold_listings = conn.execute("""
+        SELECT * FROM Auction_Listings
+        WHERE Seller_Email = ? AND Status = 2
+    """, (email,)).fetchall()
+
+    return render_template("seller_auction.html", categories=categories,active_listings=active_listings,inactive_listings=inactive_listings,sold_listings=sold_listings)
+
+
+# route for creating an auction
+@app.route("/create_auction",methods=['POST'])
+def create_auction():
+    conn = get_db_connection()
+    Seller_Email = session.get("email")
+    # Listing_ID increase automatically
+    Category = request.form['category']
+    Auction_Title = request.form['title']
+    Product_Name = request.form['name']
+    Product_Description = request.form['description']
+    Quantity = request.form['quantity']
+    Reserve_Price = "$"+request.form['r_price']
+    Max_bids = request.form['max_bid']
+    Status = 1
+
+    row = conn.execute("""
+        SELECT MAX(Listing_ID)
+        FROM Auction_Listings
+        WHERE Seller_Email = ?
+    """, (Seller_Email,)).fetchone()
+
+    if row[0] is None:
+        Listing_ID = 1
+    else:
+        Listing_ID = row[0] + 1
+
+    # generate the SQL statement
+    conn.execute("""
+        INSERT INTO Auction_Listings (
+            Seller_Email,
+            Listing_ID,
+            Category,
+            Auction_Title,
+            Product_Name,
+            Product_Description,
+            Quantity,
+            Reserve_Price,
+            Max_bids,
+            Status
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        Seller_Email,
+        Listing_ID,
+        Category,
+        Auction_Title,
+        Product_Name,
+        Product_Description,
+        Quantity,
+        Reserve_Price,
+        Max_bids,
+        Status
+    ))    
+    conn.commit()
+
+    return redirect(url_for("seller_auction", created="1"))
+
+#for check if auction can edit or not
+@app.route('/check_edit_auction', methods=['POST'])
+def check_edit_auction():
+    conn = get_db_connection()
+    seller_email = session.get("email")
+    if not seller_email:
+        return {"ok": False, "reason": "Please log in first."}
+
+    listing_id = request.form.get("listing_id", type=int)
+    if not listing_id:
+        return {"ok": False, "reason": "Missing listing ID."}
+
+    listing = conn.execute("""
+        SELECT *
+        FROM Auction_Listings
+        WHERE Seller_Email = ? AND Listing_ID = ?
+    """, (seller_email, listing_id)).fetchone()
+
+    bid =  conn.execute("""
+        SELECT * 
+        FROM Bids 
+        WHERE Listing_ID = ?
+    """,(listing_id,)).fetchone()
+
+    if bid:
+        conn.close()
+        print("false")
+        return {"ok": False, "reason": "Listing has been bid for at least once."}
+
+    if not listing:
+        conn.close()
+        print("false")
+        return {"ok": False, "reason": "Listing not found."}
+
+    if listing["Status"] == 2:
+        conn.close()
+        print("false")
+        return {"ok": False, "reason": "Sold listings cannot be edited."}
+
+    if listing["Status"] == 1:
+        bid_count = conn.execute("""
+            SELECT COUNT(*)
+            FROM Bids
+            WHERE Seller_Email = ? AND Listing_ID = ?
+        """, (seller_email, listing_id)).fetchone()[0]
+
+        if bid_count > 0:
+            conn.close()
+            print("false")
+            return {
+                "ok": False,
+                "reason": "This active listing cannot be updated because bidding has already started."
+            }
+
+    data = {
+        "listing_id": listing["Listing_ID"],
+        "title": listing["Auction_Title"],
+        "name": listing["Product_Name"],
+        "category": listing["Category"],
+        "description": listing["Product_Description"],
+        "quantity": listing["Quantity"],
+        "reserve_price": listing["Reserve_Price"],
+        "max_bids": listing["Max_bids"]
+    }
+
+    conn.close()
+    print("True")
+    return {"ok": True, "listing": data}
+
+# This changes active to inactive, otherwise
+@app.route('/toggle_status', methods=['POST'])
+def toggle_status():
+    conn = get_db_connection()
+
+    try:
+        seller_email = session.get("email")
+        if not seller_email:
+            return redirect(url_for("login"))
+
+        listing_id = request.form.get("listing_id", type=int)
+        new_status = request.form.get("status", type=int)
+
+        if listing_id is None or new_status is None:
+            return "Invalid request"
+
+        conn.execute("""
+            UPDATE Auction_Listings
+            SET Status = ?
+            WHERE Listing_ID = ? AND Seller_Email = ?
+        """, (new_status, listing_id, seller_email))
+
+        conn.commit()
+
+        return redirect(url_for("seller_auction"))
+
+    finally:
+        conn.close()
+
+@app.route('/update_auction', methods=['POST'])
+def update_auction():
+    conn = get_db_connection()
+    seller_email = session.get("email")
+    if not seller_email:
+        return redirect(url_for("login"))
+
+    listing_id = request.form.get("listing_id", type=int)
+    category = request.form.get("category", "").strip()
+    title = request.form.get("title", "").strip()
+    name = request.form.get("name", "").strip()
+    description = request.form.get("description", "").strip()
+    quantity = request.form.get("quantity", type=int)
+    reserve_price = "$"+ request.form.get("r_price", "").strip()
+    max_bids = request.form.get("max_bid", type=int)
+
+    if not listing_id:
+        return "Missing listing ID."
+
+    if not title or not name or not category or not description:
+        return "All fields are required."
+
+    if quantity is None or quantity <= 0:
+        return "Quantity must be greater than 0."
+
+    if max_bids is None or max_bids <= 0:
+        return "Maximum number of bids must be greater than 0."
+
+    try:
+        if float(request.form.get("r_price", "").strip()) <= 0:
+            return "Reserve price must be greater than 0."
+    except ValueError:
+        return "Reserve price must be a valid number."
+
+
+
+    listing = conn.execute("""
+        SELECT *
+        FROM Auction_Listings
+        WHERE Seller_Email = ?
+          AND Listing_ID = ?
+    """, (seller_email, listing_id)).fetchone()
+
+    if not listing:
+        conn.close()
+        return "Listing not found."
+
+    # double check
+    if listing["Status"] == 2:
+        conn.close()
+        return "Sold listings cannot be edited."
+
+    if listing["Status"] == 1:
+        bid_count = conn.execute("""
+            SELECT COUNT(*)
+            FROM Bids
+            WHERE Seller_Email = ?
+              AND Listing_ID = ?
+        """, (seller_email, listing_id)).fetchone()[0]
+
+        if bid_count > 0:
+            conn.close()
+            return "This active listing cannot be updated because bidding has already started."
+
+    conn.execute("""
+        UPDATE Auction_Listings
+        SET Category = ?,
+            Auction_Title = ?,
+            Product_Name = ?,
+            Product_Description = ?,
+            Quantity = ?,
+            Reserve_Price = ?,
+            Max_bids = ?
+        WHERE Seller_Email = ?
+          AND Listing_ID = ?
+    """, (
+        category,
+        title,
+        name,
+        description,
+        quantity,
+        reserve_price,
+        max_bids,
+        seller_email,
+        listing_id
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("seller_auction", updated="1"))
 
 
 
