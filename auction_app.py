@@ -1038,6 +1038,521 @@ def watchlist():
     except Exception as e:
         flash(f'Error loading watchlist: {str(e)}', 'danger')
         return redirect(url_for('bidder_dashboard'))
+# route for page seller_auction.html
+@app.route('/seller_auction')
+def seller_auction():
+    conn = get_db_connection()
+    if not session.get("email"):
+        return redirect(url_for("login"))
+
+    #
+    # this part is for create auction
+    # Get category selections (fetch all categories)
+    email = session.get("email")
+    categories = conn.execute("""
+    SELECT category_name FROM Categories 
+    """).fetchall()
+
+    active_listings = conn.execute("""
+    SELECT * FROM Auction_Listings
+    WHERE Seller_Email = ? AND Status = 1
+""", (email,)).fetchall()
+
+    inactive_listings = conn.execute("""
+        SELECT * FROM Auction_Listings
+        WHERE Seller_Email = ? AND Status = 0
+    """, (email,)).fetchall()
+
+    sold_listings = conn.execute("""
+        SELECT * FROM Auction_Listings
+        WHERE Seller_Email = ? AND Status = 2
+    """, (email,)).fetchall()
+
+    return render_template("seller_auction.html", categories=categories,active_listings=active_listings,inactive_listings=inactive_listings,sold_listings=sold_listings)
+# route for creating an auction
+@app.route("/create_auction",methods=['POST'])
+def create_auction():
+    conn = get_db_connection()
+    Seller_Email = session.get("email")
+    # Listing_ID increase automatically
+    Category = request.form['category']
+    Auction_Title = request.form['title']
+    Product_Name = request.form['name']
+    Product_Description = request.form['description']
+    Quantity = request.form['quantity']
+    Reserve_Price = "$"+request.form['r_price']
+    Max_bids = request.form['max_bid']
+    Status = 1
+
+    row = conn.execute("""
+        SELECT MAX(Listing_ID)
+        FROM Auction_Listings
+        WHERE Seller_Email = ?
+    """, (Seller_Email,)).fetchone()
+
+    if row[0] is None:
+        Listing_ID = 1
+    else:
+        Listing_ID = row[0] + 1
+
+    # generate the SQL statement
+    conn.execute("""
+        INSERT INTO Auction_Listings (
+            Seller_Email,
+            Listing_ID,
+            Category,
+            Auction_Title,
+            Product_Name,
+            Product_Description,
+            Quantity,
+            Reserve_Price,
+            Max_bids,
+            Status
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        Seller_Email,
+        Listing_ID,
+        Category,
+        Auction_Title,
+        Product_Name,
+        Product_Description,
+        Quantity,
+        Reserve_Price,
+        Max_bids,
+        Status
+    ))    
+    conn.commit()
+
+    return redirect(url_for("seller_auction", created="1"))
+
+#for check if auction can edit or not
+@app.route('/check_edit_auction', methods=['POST'])
+def check_edit_auction():
+    conn = get_db_connection()
+    seller_email = session.get("email")
+    if not seller_email:
+        return {"ok": False, "reason": "Please log in first."}
+
+    listing_id = request.form.get("listing_id", type=int)
+    if not listing_id:
+        return {"ok": False, "reason": "Missing listing ID."}
+
+    listing = conn.execute("""
+        SELECT *
+        FROM Auction_Listings
+        WHERE Seller_Email = ? AND Listing_ID = ?
+    """, (seller_email, listing_id)).fetchone()
+
+    bid =  conn.execute("""
+        SELECT * 
+        FROM Bids 
+        WHERE Listing_ID = ?
+    """,(listing_id,)).fetchone()
+
+    if bid:
+        conn.close()
+        print("false")
+        return {"ok": False, "reason": "Listing has been bid for at least once."}
+
+    if not listing:
+        conn.close()
+        print("false")
+        return {"ok": False, "reason": "Listing not found."}
+
+    if listing["Status"] == 2:
+        conn.close()
+        print("false")
+        return {"ok": False, "reason": "Sold listings cannot be edited."}
+
+    if listing["Status"] == 1:
+        bid_count = conn.execute("""
+            SELECT COUNT(*)
+            FROM Bids
+            WHERE Seller_Email = ? AND Listing_ID = ?
+        """, (seller_email, listing_id)).fetchone()[0]
+
+        if bid_count > 0:
+            conn.close()
+            print("false")
+            return {
+                "ok": False,
+                "reason": "This active listing cannot be updated because bidding has already started."
+            }
+
+    data = {
+        "listing_id": listing["Listing_ID"],
+        "title": listing["Auction_Title"],
+        "name": listing["Product_Name"],
+        "category": listing["Category"],
+        "description": listing["Product_Description"],
+        "quantity": listing["Quantity"],
+        "reserve_price": listing["Reserve_Price"],
+        "max_bids": listing["Max_bids"]
+    }
+
+    conn.close()
+    print("True")
+    return {"ok": True, "listing": data}
+
+# This changes active to inactive, otherwise
+@app.route('/toggle_status', methods=['POST'])
+def toggle_status():
+    conn = get_db_connection()
+
+    try:
+        seller_email = session.get("email")
+        if not seller_email:
+            return redirect(url_for("login"))
+
+        listing_id = request.form.get("listing_id", type=int)
+        new_status = request.form.get("status", type=int)
+
+        if listing_id is None or new_status is None:
+            return "Invalid request"
+
+        conn.execute("""
+            UPDATE Auction_Listings
+            SET Status = ?
+            WHERE Listing_ID = ? AND Seller_Email = ?
+        """, (new_status, listing_id, seller_email))
+
+        conn.commit()
+
+        return redirect(url_for("seller_auction"))
+
+    finally:
+        conn.close()
+
+@app.route('/update_auction', methods=['POST'])
+def update_auction():
+    conn = get_db_connection()
+    seller_email = session.get("email")
+    if not seller_email:
+        return redirect(url_for("login"))
+
+    listing_id = request.form.get("listing_id", type=int)
+    category = request.form.get("category", "").strip()
+    title = request.form.get("title", "").strip()
+    name = request.form.get("name", "").strip()
+    description = request.form.get("description", "").strip()
+    quantity = request.form.get("quantity", type=int)
+    reserve_price = "$"+ request.form.get("r_price", "").strip()
+    max_bids = request.form.get("max_bid", type=int)
+
+    if not listing_id:
+        return "Missing listing ID."
+
+    if not title or not name or not category or not description:
+        return "All fields are required."
+
+    if quantity is None or quantity <= 0:
+        return "Quantity must be greater than 0."
+
+    if max_bids is None or max_bids <= 0:
+        return "Maximum number of bids must be greater than 0."
+
+    try:
+        if float(request.form.get("r_price", "").strip()) <= 0:
+            return "Reserve price must be greater than 0."
+    except ValueError:
+        return "Reserve price must be a valid number."
+
+
+
+    listing = conn.execute("""
+        SELECT *
+        FROM Auction_Listings
+        WHERE Seller_Email = ?
+          AND Listing_ID = ?
+    """, (seller_email, listing_id)).fetchone()
+
+    if not listing:
+        conn.close()
+        return "Listing not found."
+
+    # double check
+    if listing["Status"] == 2:
+        conn.close()
+        return "Sold listings cannot be edited."
+
+    if listing["Status"] == 1:
+        bid_count = conn.execute("""
+            SELECT COUNT(*)
+            FROM Bids
+            WHERE Seller_Email = ?
+              AND Listing_ID = ?
+        """, (seller_email, listing_id)).fetchone()[0]
+
+        if bid_count > 0:
+            conn.close()
+            return "This active listing cannot be updated because bidding has already started."
+
+    conn.execute("""
+        UPDATE Auction_Listings
+        SET Category = ?,
+            Auction_Title = ?,
+            Product_Name = ?,
+            Product_Description = ?,
+            Quantity = ?,
+            Reserve_Price = ?,
+            Max_bids = ?
+        WHERE Seller_Email = ?
+          AND Listing_ID = ?
+    """, (
+        category,
+        title,
+        name,
+        description,
+        quantity,
+        reserve_price,
+        max_bids,
+        seller_email,
+        listing_id
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("seller_auction", updated="1"))
+
+@app.route('/seller_profile')
+def seller_profile():
+    email = session.get("email")
+    if not email:
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+
+    return render_template("seller_profile.html",email=email,)
+
+
+@app.route('/request_change_email', methods=['POST'])
+def request_change_email():
+    conn = get_db_connection()
+
+    try:
+        sender_email = session.get("email")
+        if not sender_email:
+            return redirect(url_for("login"))
+
+        new_email = request.form.get("new_email", "").strip()
+
+        if not new_email:
+            return redirect(url_for(f'{user_type}_profile', request_sent="0"))
+
+        if new_email == sender_email:
+            return redirect(url_for(f'{user_type}_profile', request_sent="same"))
+
+        # generate max id+1
+        row = conn.execute("""
+            SELECT MAX(request_id) FROM Requests
+        """).fetchone()
+
+        # if empty table start from 1
+        max_id = row[0] if row[0] is not None else 0
+        request_id = max_id + 1
+
+        helpdesk_email = "helpdeskteam@lsu.edu"
+        request_type = "ChangeID"
+        request_desc = f"Please change my ID from {sender_email} to {new_email}."
+        request_status = 0
+
+        conn.execute("""
+            INSERT INTO Requests (
+                request_id,
+                sender_email,
+                helpdesk_staff_email,
+                request_type,
+                request_desc,
+                request_status
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            request_id,
+            sender_email,
+            helpdesk_email,
+            request_type,
+            request_desc,
+            request_status
+        ))
+
+        conn.commit()
+
+        # redirect back to profile
+        return redirect(url_for(f'{user_type}_profile', request_sent="1"))
+
+    finally:
+        conn.close()
+
+#this update password
+@app.route('/update_password', methods=['POST'])
+def update_profile():
+    conn = get_db_connection()
+
+    try:
+        user_type = session.get('user_type')
+        email = session.get("email")
+        if not email:
+            return redirect(url_for("login"))
+        user_type = session.get('user_type')
+        new_password = request.form.get("password", "").strip()
+
+        # if no new password do not update
+        if not new_password:
+            return redirect(url_for(f'{user_type}_profile', updated="0"))
+
+        # hash password
+        hashed_password = generate_password_hash(new_password)
+
+        # update database
+        conn.execute("""
+            UPDATE Users
+            SET password = ?
+            WHERE email = ?
+        """, (hashed_password, email))
+
+        conn.commit()
+
+        return redirect(url_for(f'{user_type}_profile', request_sent="1"))
+    finally:
+        conn.close()
+
+
+# This update bank account information of seller
+@app.route('/update_bank_info', methods=['POST'])
+def update_bank_info():
+        conn = get_db_connection()
+
+        try:
+            email = session.get("email")
+            user_type = session.get("user_type")
+
+            if not email:
+                return redirect(url_for("login"))
+
+            routing = request.form.get("routing", "").strip()
+            account = request.form.get("account", "").strip()
+
+
+            if routing and account:
+                conn.execute("""
+                    UPDATE Sellers
+                    SET bank_routing_number = ?,
+                        bank_account_number = ?
+                    WHERE email = ?
+                """, (routing, account, email))
+            elif routing:
+                conn.execute("""
+                    UPDATE Sellers
+                    SET bank_routing_number = ?,
+                    WHERE email = ?
+                """, (routing, email))
+            elif account:
+                conn.execute("""
+                    UPDATE Sellers
+                    SET bank_account_number = ?
+                    WHERE email = ?
+                """, (account, email))
+            else:
+                return redirect(url_for(f'{user_type}_profile', bank_updated="invalid"))
+
+
+            conn.commit()
+
+            return redirect(url_for(f'{user_type}_profile', bank_updated="1"))
+
+        finally:
+            conn.close()
+
+@app.route('/bidder_profile')
+def bidder_profile():
+    email = session.get("email")
+    if not email:
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+
+    try:
+        bidder = conn.execute("""
+            SELECT 
+                B.email,
+                B.first_name,
+                B.last_name,
+                B.major,
+                B.home_address_id,
+                A.street_num,
+                A.street_name,
+                A.zipcode
+            FROM Bidders B
+            LEFT JOIN Address A
+                ON B.home_address_id = A.address_id
+            WHERE B.email = ?
+        """, (email,)).fetchone()
+
+        if not bidder:
+            return redirect(url_for("login"))
+
+        return render_template("bidder_profile.html", bidder=bidder)
+    finally:
+        conn.close()    
+
+# THis part update bidder profile
+@app.route('/update_bidder_profile', methods=['POST'])
+def update_bidder_profile():
+    email = session.get("email")
+    if not email:
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+
+    try:
+        first_name = request.form.get("first_name", "").strip()
+        last_name = request.form.get("last_name", "").strip()
+        major = request.form.get("major", "").strip()
+        street_num = request.form.get("street_num", type=int)
+        street_name = request.form.get("street_name", "").strip()
+        zipcode = request.form.get("zipcode", type=int)
+
+        if not first_name or not last_name or not major or not street_name:
+            return redirect(url_for("bidder_profile", updated="0"))
+
+        if street_num is None or zipcode is None:
+            return redirect(url_for("bidder_profile", updated="0"))
+
+        bidder = conn.execute("""
+            SELECT home_address_id
+            FROM Bidders
+            WHERE email = ?
+        """, (email,)).fetchone()
+
+        if not bidder:
+            return redirect(url_for("login"))
+
+        address_id = bidder["home_address_id"]
+
+        conn.execute("""
+            UPDATE Bidders
+            SET first_name = ?,
+                last_name = ?,
+                major = ?
+            WHERE email = ?
+        """, (first_name, last_name, major, email))
+
+        conn.execute("""
+            UPDATE Address
+            SET street_num = ?,
+                street_name = ?,
+                zipcode = ?
+            WHERE address_id = ?
+        """, (street_num, street_name, zipcode, address_id))
+
+        conn.commit()
+
+        return redirect(url_for("bidder_profile", updated="1"))
+
+    finally:
+        conn.close()
 
 @app.route('/add_watchlist', methods=['POST'])
 @login_required
@@ -1052,14 +1567,16 @@ def add_watchlist():
                 SELECT 1 FROM Watchlist 
                 WHERE Bidder_Email = ? AND Seller_Email = ? AND Listing_ID = ?
             ''', (user_email, seller_email, listing_id)).fetchone()
-
+            
             if not exists:
                 conn.execute('''
                     INSERT INTO Watchlist (Bidder_Email, Seller_Email, Listing_ID)
                     VALUES (?, ?, ?)
                 ''', (user_email, seller_email, listing_id))
                 conn.commit()
+                
         return redirect(request.referrer or url_for('watchlist'))
+        
     except Exception as e:
         flash(f'Error adding to watchlist: {str(e)}', 'danger')
         return redirect(url_for('bidder_dashboard'))
@@ -1233,6 +1750,243 @@ def submit_request():
         import traceback
         traceback.print_exc()
         return redirect(url_for('submit_request'))
+
+# ==============================
+# 🌟 EXTRA CREDIT: HelpDesk - Add Category Request
+# ==============================
+
+# 1. 卖家提交新增分类请求
+@app.route('/submit_category_request', methods=['GET', 'POST'])
+@login_required
+def submit_category_request():
+    # 假设 session key 是 'user_id' 和 'user_type'
+    if session.get('user_type') != 'seller':
+        flash('Only sellers can request new categories.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    if request.method == 'POST':
+        sender_email = session.get('user_id')
+        parent_category = request.form.get('parent_category').strip() # 必须提供父级
+        new_category = request.form.get('new_category').strip()       # 新类别名称
+        reason = request.form.get('reason').strip()
+
+        if not parent_category or not new_category:
+            flash('Both parent category and new category names are required.', 'danger')
+            return render_template('submit_category_request.html')
+
+        try:
+            with get_db_connection() as conn:
+                # 将结构化数据拼接到 desc 中，方便后续解析
+                structured_desc = f"Parent:{parent_category}|New:{new_category}|Reason:{reason}"
+                
+                conn.execute('''
+                    INSERT INTO Requests
+                    (sender_email, helpdesk_staff_email, request_type, request_desc, request_status)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (
+                    sender_email,
+                    'helpdeskteam@lsu.edu', 
+                    'AddCategory',
+                    structured_desc,
+                    0  # Schema 规定：0 为未完成
+                ))
+                conn.commit()
+            flash('Category request submitted successfully! Pending HelpDesk approval.', 'success')
+            return redirect(url_for('seller_dashboard'))
+        except Exception as e:
+            flash(f'Error submitting request: {str(e)}', 'danger')
+
+    return render_template('submit_category_request.html')
+@app.route('/approve_category_request', methods=['POST'])
+@login_required
+def approve_category_request():
+    if session.get('user_type') != 'helpdesk':
+        return redirect(url_for('login'))
+
+    request_id = request.form.get('request_id')
+    helpdesk_email = session.get('user_id')
+
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # 步骤 A：获取工单详情并解析字符串
+            req = cursor.execute('SELECT request_desc FROM Requests WHERE request_id = ? AND request_status = 0', (request_id,)).fetchone()
+            if not req:
+                flash('Request not found or already processed.', 'warning')
+                return redirect(url_for('helpdesk_dashboard'))
+
+            desc = req['request_desc'] # 例如 "Parent:Electronics|New:Drones|Reason:Need to sell drone"
+            
+            # 简单的字符串解析 (提取 Parent 和 New 的值)
+            parts = dict(item.split(":", 1) for item in desc.split("|"))
+            parent_cat = parts.get("Parent")
+            new_cat = parts.get("New")
+
+            # 步骤 B：执行事务 - 先插入新类别
+            cursor.execute('''
+                INSERT INTO Categories (parent_category, category_name)
+                VALUES (?, ?)
+            ''', (parent_cat, new_cat))
+
+            # 步骤 C：执行事务 - 将工单分配给自己，并标记为完成 (1)
+            cursor.execute('''
+                UPDATE Requests
+                SET helpdesk_staff_email = ?, request_status = 1
+                WHERE request_id = ?
+            ''', (helpdesk_email, request_id))
+            
+            conn.commit()
+            flash(f'Success! Category "{new_cat}" has been added to the system.', 'success')
+            
+    except Exception as e:
+        flash(f'Database Error (Category might already exist): {str(e)}', 'danger')
+
+    return redirect(url_for('helpdesk_dashboard'))
+
+
+# ==============================
+# 🌟 NEW: HelpDesk - Reject Category Request
+# ==============================
+
+@app.route('/reject_request', methods=['POST'])
+@login_required
+def reject_request():
+    if session.get('user_type') != 'helpdesk':
+        return redirect(url_for('login'))
+
+    request_id = request.form.get('request_id')
+    helpdesk_email = session.get('user_id')
+
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # 验证请求是否存在
+            req = cursor.execute('SELECT request_id FROM Requests WHERE request_id = ? AND request_status = 0', (request_id,)).fetchone()
+            if not req:
+                flash('Request not found or already processed.', 'warning')
+                return redirect(url_for('helpdesk_dashboard'))
+
+            # 标记为完成 (Status = 1)，但不执行插入操作
+            # 可以在 request_desc 后面追加 "(Rejected)" 以便留痕
+            cursor.execute('''
+                UPDATE Requests
+                SET helpdesk_staff_email = ?, request_status = 1, 
+                    request_desc = request_desc || ' [REJECTED by HelpDesk]'
+                WHERE request_id = ?
+            ''', (helpdesk_email, request_id))
+            
+            conn.commit()
+            flash('Category request has been rejected.', 'warning')
+            
+    except Exception as e:
+        flash(f'Error rejecting request: {str(e)}', 'danger')
+
+    return redirect(url_for('helpdesk_dashboard'))
+
+# ==============================
+# 🌟 NEW: HelpDesk - Claim Request
+# ==============================
+
+@app.route('/claim_request', methods=['POST'])
+@login_required
+def claim_request():
+    if session.get('user_type') != 'helpdesk':
+        flash('Access denied. HelpDesk personnel only.', 'danger')
+        return redirect(url_for('login'))
+
+    request_id = request.form.get('request_id')
+    helpdesk_email = session.get('user_id')
+
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # 检查请求是否存在且未被认领
+            req = cursor.execute('''
+                SELECT request_id, helpdesk_staff_email 
+                FROM Requests 
+                WHERE request_id = ? AND request_status = 0
+            ''', (request_id,)).fetchone()
+            
+            if not req:
+                flash('Request not found or already completed.', 'warning')
+                return redirect(url_for('helpdesk_dashboard'))
+            
+            # 如果已经被其他人认领
+            if req['helpdesk_staff_email'] != 'helpdeskteam@lsu.edu' and req['helpdesk_staff_email'] != helpdesk_email:
+                flash('This request has already been claimed by another staff member.', 'warning')
+                return redirect(url_for('helpdesk_dashboard'))
+            
+            # 认领请求：将 helpdesk_staff_email 更新为当前用户
+            cursor.execute('''
+                UPDATE Requests
+                SET helpdesk_staff_email = ?
+                WHERE request_id = ? AND request_status = 0
+            ''', (helpdesk_email, request_id))
+            
+            conn.commit()
+            flash('Request claimed successfully!', 'success')
+            
+    except Exception as e:
+        flash(f'Error claiming request: {str(e)}', 'danger')
+
+    return redirect(url_for('helpdesk_dashboard'))
+
+
+# ==============================
+# 🌟 NEW: HelpDesk - Mark Request as Completed
+# ==============================
+
+@app.route('/mark_completed', methods=['POST'])
+@login_required
+def mark_completed():
+    if session.get('user_type') != 'helpdesk':
+        flash('Access denied. HelpDesk personnel only.', 'danger')
+        return redirect(url_for('login'))
+
+    request_id = request.form.get('request_id')
+    helpdesk_email = session.get('user_id')
+
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # 验证请求是否属于当前用户
+            req = cursor.execute('''
+                SELECT request_id, helpdesk_staff_email, request_status
+                FROM Requests 
+                WHERE request_id = ?
+            ''', (request_id,)).fetchone()
+            
+            if not req:
+                flash('Request not found.', 'warning')
+                return redirect(url_for('helpdesk_dashboard'))
+            
+            # 只有认领者或管理员可以标记完成
+            if req['helpdesk_staff_email'] != helpdesk_email:
+                flash('You can only complete requests assigned to you.', 'warning')
+                return redirect(url_for('helpdesk_dashboard'))
+            
+            if req['request_status'] == 1:
+                flash('Request is already completed.', 'info')
+                return redirect(url_for('helpdesk_dashboard'))
+            
+            # 标记为完成
+            cursor.execute('''
+                UPDATE Requests
+                SET request_status = 1
+                WHERE request_id = ?
+            ''', (request_id,))
+            
+            conn.commit()
+            flash('Request marked as completed!', 'success')
+            
+    except Exception as e:
+        flash(f'Error completing request: {str(e)}', 'danger')
+
+    return redirect(url_for('helpdesk_dashboard'))
 
 if __name__ == '__main__':
     #app.run()

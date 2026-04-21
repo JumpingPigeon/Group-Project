@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bidder Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; }
+    .nav { background: #111827; color: white; padding: 14px 20px; }
+    .container { max-width: 900px; margin: 24px auto; padding: 0 16px; }
+    .card { background: white; border-radius: 12px; padding: 18px; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+    .muted { color: #6b7280; }
+    .row { display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+    .pill { background: #eef2ff; padding: 8px 10px; border-radius: 999px; font-size: 14px; }
+    a { color: #2563eb; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="nav">
+    <strong>NittanyAuction</strong> — Bidder
+  </div>
+
+  <div class="container">
+    <div class="card p-4 mt-5 shadow-sm" style="max-width: 850px; margin: 80px auto 20px auto;">
+        <h3 class="mb-4">Bidder Profile</h3>
+
+                        <!-- this form send request change ID -->
+            <form method="POST" action="/request_change_email">
+                <div class="mb-3">
+                    <label class="form-label">New Email</label>
+                    <input type="email" class="form-control" name="new_email" required>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-50">
+                    Request Change ID
+                </button>
+            </form>
+            <!-- this form update password -->
+            <br>
+            <form method="POST" action="/update_password">
+                <!-- Password -->
+                <div class="mb-3">
+                    <label class="form-label">New Password</label>
+                    <input type="password" class="form-control" name="password" placeholder="Enter new password" required>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-50">
+                    Update Password
+                </button>
+
+            </form>
+    </div>
+    <p style="margin-top: 14px;">
+        <a href="/">Back to Home</a> |
+        <a href="{{ url_for('logout') }}">Log out</a>
+      </p>
+    <div class="card p-4 shadow-sm" style="max-width: 850px; margin: 0 auto;">
+        <form method="POST" action="/update_bidder_profile">
+
+            <div class="mb-3">
+                <label class="form-label">First Name</label>
+                <input type="text" class="form-control" name="first_name" value="{{ bidder['first_name'] }}" required>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Last Name</label>
+                <input type="text" class="form-control" name="last_name" value="{{ bidder['last_name'] }}" required>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Major</label>
+                <input type="text" class="form-control" name="major" value="{{ bidder['major'] }}" required>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Street Number</label>
+                <input type="number" class="form-control" name="street_num" value="{{ bidder['street_num'] }}" required>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Street Name</label>
+                <input type="text" class="form-control" name="street_name" value="{{ bidder['street_name'] }}" required>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Zipcode</label>
+                <input type="number" class="form-control" name="zipcode" value="{{ bidder['zipcode'] }}" required>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">
+                Update Profile
+            </button>
+        </form>
+    </div>
+</div>
+
+
+
+
+</body>
+</html>
