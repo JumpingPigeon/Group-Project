@@ -82,6 +82,17 @@
                        placeholder="Search for items, categories, or sellers..." required>
             </div>
             
+            <div class="form-group mb-3">
+                <select name="search_field" class="form-control">
+                    <option value="all">🔍 Search in All Fields</option>
+                    <option value="title">📝 Title</option>
+                    <option value="product_name">📦 Product Name</option>
+                    <option value="description">📄 Product Description</option>
+                    <option value="category">📁 Category</option>
+                    <option value="seller_name">👤 Seller</option>
+                </select>
+            </div>
+            
             <div class="row mb-3">
                 <div class="col-md-6">
                     <input type="number" name="min_price" class="form-control" 
@@ -98,7 +109,7 @@
             </button>
         </form>
         <p class="text-center text-muted mt-3" style="font-size: 0.9rem;">
-            Search by: Product Name / Title / Description / Category / Seller
+            Select a specific field to narrow your search
         </p>
     </div>
 </div>

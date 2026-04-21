@@ -204,10 +204,12 @@ def index():
 @app.route('/search')
 def search():
     query = request.args.get('q', '').strip() # Get keyword search query
+    search_field = request.args.get('search_field', 'all').strip() # Get the specific field to search in (title, product_name, description, category, seller_name, or all)
     min_price = request.args.get('min_price', '').strip()
     max_price = request.args.get('max_price', '').strip()
     
     user_email = session.get('user_id')
+    items = []  # Initialize items to empty list
     
     try:
         with get_db_connection() as conn:
@@ -220,14 +222,14 @@ def search():
                     al.Reserve_Price, 
                     al.Max_bids, 
                     al.Status,
-                    al.Description,
+                    al.Product_Description as Description,
                     c.category_name as Category_Name,
                     COALESCE((SELECT MAX(b.Bid_price) FROM Bids b WHERE b.Seller_Email = al.Seller_Email AND b.Listing_ID = al.Listing_ID), 0) as current_bid,
                     (SELECT COUNT(*) FROM Bids b WHERE b.Seller_Email = al.Seller_Email AND b.Listing_ID = al.Listing_ID) as bid_count,
                     COALESCE(bidder.first_name, lv.Business_Name, 'Unknown') as Seller_First_Name,
                     COALESCE(bidder.last_name, '') as Seller_Last_Name
                 FROM Auction_Listings al
-                LEFT JOIN Categories c ON al.Category_Name = c.category_name
+                LEFT JOIN Categories c ON al.Category = c.category_name
                 LEFT JOIN Bidders bidder ON al.Seller_Email = bidder.email
                 LEFT JOIN Local_Vendors lv ON al.Seller_Email = lv.Email
                 WHERE al.Status = 1
@@ -238,20 +240,35 @@ def search():
             
             # Keyword search across multiple fields
             if query:
-                search_conditions = [
-                    "al.Auction_Title LIKE ?",
-                    "al.Product_Name LIKE ?",
-                    "al.Description LIKE ?",
-                    "c.category_name LIKE ?",
-                    "bidder.first_name LIKE ?",
-                    "bidder.last_name LIKE ?",
-                    "lv.Business_Name LIKE ?",
-                    "al.Seller_Email LIKE ?"
-                ]
+                like_query = f"%{query}%"
                 
-                like_query = f"%{query}%" # partial match
-                conditions.append("(" + " OR ".join(search_conditions) + ")")
-                params.extend([like_query] * len(search_conditions)) # Add the same like_query for each search condition
+                if search_field == 'title':
+                    conditions.append("al.Auction_Title LIKE ?")
+                    params.append(like_query)
+                elif search_field == 'product_name':
+                    conditions.append("al.Product_Name LIKE ?")
+                    params.append(like_query)
+                elif search_field == 'description':
+                    conditions.append("al.Product_Description LIKE ?")
+                    params.append(like_query)
+                elif search_field == 'category':
+                    conditions.append("COALESCE(c.category_name, '') LIKE ?")
+                    params.append(like_query)
+                elif search_field == 'seller_name':
+                    conditions.append("(COALESCE(bidder.first_name, '') LIKE ? OR COALESCE(bidder.last_name, '') LIKE ? OR COALESCE(lv.Business_Name, '') LIKE ?)")
+                    params.extend([like_query, like_query, like_query])
+                else:  # 'all' or default
+                    search_conditions = [
+                        "al.Auction_Title LIKE ?",
+                        "al.Product_Name LIKE ?",
+                        "al.Product_Description LIKE ?",
+                        "COALESCE(c.category_name, '') LIKE ?",
+                        "COALESCE(bidder.first_name, '') LIKE ?",
+                        "COALESCE(bidder.last_name, '') LIKE ?",
+                        "COALESCE(lv.Business_Name, '') LIKE ?",
+                    ]
+                    conditions.append("(" + " OR ".join(search_conditions) + ")")
+                    params.extend([like_query] * len(search_conditions)) # Add the same like_query for each search condition
             
             if min_price:
                 try:
@@ -275,6 +292,21 @@ def search():
             base_query += " ORDER BY al.Listing_ID DESC" # Show newest listings first
             
             items = conn.execute(base_query, params).fetchall() # Get all matching items
+
+            # Convert Reserve_Price from string to float for each item
+            items_list = []
+            for item in items:
+                item_dict = dict(item)
+                try:
+                    # Remove currency symbols and whitespace before converting
+                    price_str = str(item_dict['Reserve_Price']).strip()
+                    # Remove currency symbols
+                    for symbol in ['$']:
+                        price_str = price_str.replace(symbol, '')
+                    item_dict['Reserve_Price'] = float(price_str) if price_str else 0.0
+                except (ValueError, TypeError):
+                    item_dict['Reserve_Price'] = 0.0
+                items_list.append(item_dict)
             
             # Find all watchlist items for the user in one query to avoid N+1 problem
             if user_email:
@@ -285,24 +317,29 @@ def search():
                 watchlist_set = {(item['Seller_Email'], item['Listing_ID']) for item in watchlist_items}
                 
                 items_with_watchlist = []
-                for item in items:
-                    item_dict = dict(item)
-                    # Make query result into a dict so we can add the in_watchlist key without affecting the original SQL Row object
-                    item_dict['in_watchlist'] = (item['Seller_Email'], item['Listing_ID']) in watchlist_set
-                    items_with_watchlist.append(item_dict) # Create a new list of dicts that includes the in_watchlist key for each item
+                for item in items_list:
+                    # Add in_watchlist flag to already converted items
+                    item['in_watchlist'] = (item['Seller_Email'], item['Listing_ID']) in watchlist_set
+                    items_with_watchlist.append(item)
                 
                 items = items_with_watchlist
+            else:
+                items = items_list
             
     except Exception as e:
+        print(f"\n=== SEARCH ERROR ===")
+        print(f"Error: {str(e)}")
+        print(f"====================\n")
         flash(f'Error performing search: {str(e)}', 'danger')
         items = []
     
     # Return the search results along with the original query and price filters to repopulate the search form
     return render_template('search.html', 
-                         items=items, 
-                         query=query,
-                         min_price=min_price,
-                         max_price=max_price)
+                        items=items, 
+                        query=query,
+                        search_field=search_field,
+                        min_price=min_price,
+                        max_price=max_price)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -621,5 +658,5 @@ def rate_seller(seller_email, listing_id):
 
 
 if __name__ == '__main__':
-    app.run()
-    #app.run(debug=True)
+    #app.run()
+    app.run(debug=True)
