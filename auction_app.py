@@ -31,7 +31,6 @@ def build_bc(conn, c_name):
     return bc
 
 
-
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     # If user is already logged in, redirect to their dashboard
@@ -42,6 +41,7 @@ def login():
     if request.method == 'POST':
         input_email = request.form.get('email', '').strip()
         input_password = request.form.get('password', '').strip()
+        selected_role = request.form.get('role', '').strip()
 
         if not input_email or not input_password:
             flash('Email and password cannot be empty', 'danger')
@@ -59,34 +59,59 @@ def login():
                     flash('Invalid password.', 'danger')
                     return render_template('login.html')
 
-                user_type = None
-                first_name = "User"
-                
-                helpdesk = conn.execute('SELECT email FROM Helpdesk WHERE email = ?', (input_email,)).fetchone()
-                if helpdesk:
-                    user_type = 'helpdesk'
-                else:
-                    seller = conn.execute('SELECT email FROM Sellers WHERE email = ?', (input_email,)).fetchone()
-                    if seller:
-                        user_type = 'seller'
-                        # first_name = input_email.split('@')[0]
-                    else:
-                        bidder = conn.execute('SELECT first_name FROM Bidders WHERE email = ?', (input_email,)).fetchone()
-                        user_type = 'bidder'
-                        first_name = bidder['first_name'] if bidder else "Bidder"
+                is_authorized = False # Flag to check if user belongs to the selected role
+                first_name = "User" # Default name
 
-                if not user_type:
-                    flash('Error! Please try again later.', 'warning')
+            # Role-based authorization checks
+                # 1. Helpdesk
+                if selected_role == 'helpdesk':
+                    # Check if user is in Helpdesk and if so, get their position for dashboard display
+                    role_data = conn.execute('SELECT email, position FROM Helpdesk WHERE email = ?', (input_email,)).fetchone()
+                    if role_data:
+                        is_authorized = True
+                        
+                        # Get name from bidder table (assume they are student bidder), else use email prefix as name
+                        bidder_info = conn.execute('SELECT first_name FROM Bidders WHERE email = ?', (input_email,)).fetchone()
+                        if bidder_info:
+                            first_name = bidder_info['first_name']
+                        else:
+                            first_name = input_email.split('@')[0]
+                        session['position'] = role_data['position']
+
+                elif selected_role == 'seller':
+                    # Seller: Student / Local Vendor
+                    role_data = conn.execute('SELECT email FROM Sellers WHERE email = ?', (input_email,)).fetchone()
+                    if role_data:
+                        is_authorized = True
+                        
+                        bidder_info = conn.execute('SELECT first_name FROM Bidders WHERE email = ?', (input_email,)).fetchone()
+                        vendor_info = conn.execute('SELECT Business_Name FROM Local_Vendors WHERE Email = ?', (input_email,)).fetchone()
+                        
+                        if bidder_info:
+                            first_name = bidder_info['first_name']
+                        elif vendor_info:
+                            first_name = vendor_info['Business_Name']
+                        else:
+                            first_name = "Null"
+
+                elif selected_role == 'bidder':
+                    role_data = conn.execute('SELECT first_name FROM Bidders WHERE email = ?', (input_email,)).fetchone()
+                    if role_data:
+                        is_authorized = True
+                        first_name = role_data['first_name']
+
+                if not is_authorized:
+                    flash(f'Access Denied: You do not have permissions to access, please contact support.', 'warning')
                     return render_template('login.html')
 
-               # Save user info in session for later use
+                # Save user info in session and redirect to appropriate dashboard
                 session['user_id'] = user['email']
                 session['email'] = user['email']
                 session['first_name'] = first_name
-                session['user_type'] = user_type
+                session['user_type'] = selected_role
 
                 flash(f'Welcome back, {first_name}!', 'success')
-                return redirect(url_for(f'{user_type}_dashboard'))
+                return redirect(url_for(f'{selected_role}_dashboard'))
 
         except Exception as e:
             flash(f'System error: {str(e)}', 'danger')
@@ -140,7 +165,31 @@ def bidder_dashboard():
 def helpdesk_dashboard():
     if not session.get("email"):
         return redirect(url_for("login"))
-    return render_template("helpdesk_dashboard.html")
+    
+    if session.get('user_type') != 'helpdesk':
+        flash('Access denied.', 'danger')
+        return redirect(url_for('login'))
+
+    try:
+        with get_db_connection() as conn:
+            helpdesk_email = session.get('email')
+            all_requests = conn.execute('''
+                SELECT request_id, sender_email, helpdesk_staff_email, request_type, request_desc, request_status 
+                FROM Requests
+                WHERE request_status = 0
+                ORDER BY request_id ASC
+            ''').fetchall()
+            
+            # Categorize requests into unassigned(pesudo email) and assigned to current user
+            unassigned = [i for i in all_requests if i['helpdesk_staff_email'] == 'helpdeskteam@lsu.edu']
+            my_assigned = [n for n in all_requests if n['helpdesk_staff_email'] == helpdesk_email]
+
+    except Exception as e:
+        unassigned, my_assigned = [], []
+
+    return render_template("helpdesk_dashboard.html", 
+                           unassigned = unassigned, 
+                           my_assigned = my_assigned)
 
 @app.route("/seller_dashboard")
 def seller_dashboard():
@@ -154,12 +203,211 @@ def index():
 
 @app.route('/search')
 def search():
-    query = request.args.get('q')
-    return f"You searched for: {query}. Please login to see results."
+    query = request.args.get('q', '').strip() # Get keyword search query
+    min_price = request.args.get('min_price', '').strip()
+    max_price = request.args.get('max_price', '').strip()
+    
+    user_email = session.get('user_id')
+    
+    try:
+        with get_db_connection() as conn:
+            base_query = '''
+                SELECT 
+                    al.Seller_Email, 
+                    al.Listing_ID, 
+                    al.Auction_Title, 
+                    al.Product_Name, 
+                    al.Reserve_Price, 
+                    al.Max_bids, 
+                    al.Status,
+                    al.Description,
+                    c.category_name as Category_Name,
+                    COALESCE((SELECT MAX(b.Bid_price) FROM Bids b WHERE b.Seller_Email = al.Seller_Email AND b.Listing_ID = al.Listing_ID), 0) as current_bid,
+                    (SELECT COUNT(*) FROM Bids b WHERE b.Seller_Email = al.Seller_Email AND b.Listing_ID = al.Listing_ID) as bid_count,
+                    COALESCE(bidder.first_name, lv.Business_Name, 'Unknown') as Seller_First_Name,
+                    COALESCE(bidder.last_name, '') as Seller_Last_Name
+                FROM Auction_Listings al
+                LEFT JOIN Categories c ON al.Category_Name = c.category_name
+                LEFT JOIN Bidders bidder ON al.Seller_Email = bidder.email
+                LEFT JOIN Local_Vendors lv ON al.Seller_Email = lv.Email
+                WHERE al.Status = 1
+            '''
+            
+            params = []
+            conditions = []
+            
+            # Keyword search across multiple fields
+            if query:
+                search_conditions = [
+                    "al.Auction_Title LIKE ?",
+                    "al.Product_Name LIKE ?",
+                    "al.Description LIKE ?",
+                    "c.category_name LIKE ?",
+                    "bidder.first_name LIKE ?",
+                    "bidder.last_name LIKE ?",
+                    "lv.Business_Name LIKE ?",
+                    "al.Seller_Email LIKE ?"
+                ]
+                
+                like_query = f"%{query}%" # partial match
+                conditions.append("(" + " OR ".join(search_conditions) + ")")
+                params.extend([like_query] * len(search_conditions)) # Add the same like_query for each search condition
+            
+            if min_price:
+                try:
+                    min_val = float(min_price)
+                    conditions.append("al.Reserve_Price >= ?")
+                    params.append(min_val)
+                except ValueError: # If not a number than ignore the min price filter
+                    pass
+
+            if max_price:
+                try:
+                    max_val = float(max_price)
+                    conditions.append("al.Reserve_Price <= ?")
+                    params.append(max_val)
+                except ValueError: # If not a number than ignore the max price filter
+                    pass
+
+            if conditions:
+                base_query += " AND " + " AND ".join(conditions) # Combine all addtional conditions with AND
+            
+            base_query += " ORDER BY al.Listing_ID DESC" # Show newest listings first
+            
+            items = conn.execute(base_query, params).fetchall() # Get all matching items
+            
+            # Find all watchlist items for the user in one query to avoid N+1 problem
+            if user_email:
+                watchlist_items = conn.execute('''
+                    SELECT Seller_Email, Listing_ID FROM Watchlist WHERE Bidder_Email = ?
+                ''', (user_email,)).fetchall()
+                
+                watchlist_set = {(item['Seller_Email'], item['Listing_ID']) for item in watchlist_items}
+                
+                items_with_watchlist = []
+                for item in items:
+                    item_dict = dict(item)
+                    # Make query result into a dict so we can add the in_watchlist key without affecting the original SQL Row object
+                    item_dict['in_watchlist'] = (item['Seller_Email'], item['Listing_ID']) in watchlist_set
+                    items_with_watchlist.append(item_dict) # Create a new list of dicts that includes the in_watchlist key for each item
+                
+                items = items_with_watchlist
+            
+    except Exception as e:
+        flash(f'Error performing search: {str(e)}', 'danger')
+        items = []
+    
+    # Return the search results along with the original query and price filters to repopulate the search form
+    return render_template('search.html', 
+                         items=items, 
+                         query=query,
+                         min_price=min_price,
+                         max_price=max_price)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    pass
+    if 'user_id' in session:
+        return redirect(url_for(f'{session.get("user_type")}_dashboard'))
+
+    if request.method == 'POST':
+        # Get information from form
+        email = request.form.get('email', '').strip()
+        password = request.form.get('password', '').strip()
+        user_type = request.form.get('user_type', '').strip() # 'bidder', 'seller', 'helpdesk'
+        seller_sub_type = request.form.get('seller_sub_type', '').strip() # 'student' or 'vendor'
+
+        if not email or not password or not user_type:
+            flash('Please fill all required fields.', 'danger')
+            return render_template('register.html')
+
+        if user_type == 'helpdesk':
+            flash('Contact System Administrators to create a HelpDesk account.', 'danger')
+            return render_template('register.html')
+
+        street_num = request.form.get('street_num', '').strip()
+        street_name = request.form.get('street_name', '').strip()
+        zipcode = request.form.get('zipcode', '').strip()
+
+        pwd_hash = generate_password_hash(password)
+
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+
+                # 1. Insert into Users table
+                cursor.execute('INSERT INTO Users (email, password) VALUES (?, ?)', (email, pwd_hash))
+
+                # 2. Insert into Address table and get the primary key
+                cursor.execute(
+                    'INSERT INTO Address (zipcode, street_num, street_name) VALUES (?, ?, ?)',
+                    (zipcode, street_num, street_name)
+                )
+
+                addr_id = cursor.lastrowid
+
+                # 3. Depending on user type, insert into corresponding tables
+
+                # A. Bidder/Student Seller
+                if user_type == 'bidder' or (user_type == 'seller' and seller_sub_type == 'student'):
+                    first_name = request.form.get('firstname', '').strip()
+                    last_name = request.form.get('lastname', '').strip()
+                    age = request.form.get('age', '').strip()
+                    major = request.form.get('major', '').strip()
+
+                    cursor.execute('''
+                        INSERT INTO Bidders (email, first_name, last_name, age, home_address_id, major)
+                        VALUES (?, ?, ?, ?, ?, ?)''', 
+                    (email, first_name, last_name, age, addr_id, major))
+
+                    # Credit Card Info
+                    card_num = request.form.get('card_num', '').strip()
+                    card_type = request.form.get('card_type', '').strip()
+                    exp_m = request.form.get('exp_m', '').strip()
+                    exp_y = request.form.get('exp_y', '').strip()
+                    cvv = request.form.get('cvv', '').strip()
+
+                    if card_num:
+                        cursor.execute('''
+                            INSERT INTO Credit_Cards (credit_card_num, card_type, expire_month, expire_year, security_code, Owner_email)
+                            VALUES (?, ?, ?, ?, ?, ?)''', 
+                        (card_num, card_type, exp_m, exp_y, cvv, email))
+
+                    # If student seller, must generate a seller request (This will not work for Prototype Demo b/c it is not required))
+                    if user_type == 'seller' and seller_sub_type == 'student':
+                        bank_routing = request.form.get('bank_routing', '').strip()
+                        bank_account = request.form.get('bank_account', '').strip()
+                        
+                        bank_info_desc = f"Routing:{bank_routing}|Account:{bank_account}"
+
+                        cursor.execute('''
+                            INSERT INTO Requests (sender_email, helpdesk_staff_email, request_type, request_desc, request_status)
+                            VALUES (?, ?, ?, ?, ?)
+                        ''', (email, 'helpdeskteam@lsu.edu', 'SellerReg', bank_info_desc, 0))
+
+                # B. Local Vendor
+                elif user_type == 'seller' and seller_sub_type == 'vendor':
+                    bank_routing = request.form.get('bank_routing', '').strip()
+                    bank_account = request.form.get('bank_account', '').strip()
+                    business_name = request.form.get('business_name', '').strip()
+                    business_phone = request.form.get('business_phone', '').strip()
+
+                    temp_desc = f"Routing:{bank_routing}|Account:{bank_account}|BizName:{business_name}|Phone:{business_phone}|AddrID:{addr_id}"
+
+                    cursor.execute('''
+                        INSERT INTO Requests (sender_email, helpdesk_staff_email, request_type, request_desc, request_status)
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', (email, 'helpdeskteam@lsu.edu', 'SellerReg', temp_desc, 0))
+
+                conn.commit()
+                
+            flash('Registration successful! You can now log in.', 'success')
+            return redirect(url_for('login'))
+
+        except Exception as e:
+            flash(f'Email may already exist. Error: {str(e)}', 'danger')
+            return render_template('register.html')
+        
+    return render_template('register.html')
 
 @app.route('/account-redirect')
 def account_redirect():
@@ -191,7 +439,7 @@ def category_detail(name):
             ''',
             (name,)
         ).fetchall()
-    return render_template('category_detail.html',category_name=name,breadcrumb=bc,subcategories=sc,listings=l)
+    return render_template('categories.html',category_name=name,breadcrumb=bc,subcategories=sc,listings=l)
 
 @app.route('/listing/<seller_email>/<int:listing_id>')
 def listing(seller_email, listing_id):
@@ -367,10 +615,6 @@ def rate_seller(seller_email, listing_id):
         conn.commit()
     flash("Rating submitted!", "success")
     return redirect(url_for("listing", seller_email=seller_email, listing_id=listing_id))
-
-
-
-
 
 
 
