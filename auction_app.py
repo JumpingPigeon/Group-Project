@@ -3,6 +3,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps # To create reusable login_required decorator
 import sqlite3 as sql
 import re
+import uuid
 from datetime import date, datetime
 
 app = Flask(__name__)
@@ -429,7 +430,6 @@ def auction_payment(seller_email, listing_id):
                 )
             )
             conn.commit()
-            flash('Payment completed and transaction recorded.', 'success')
             return redirect(url_for('listing', seller_email=seller_email, listing_id=listing_id))
 
         can_r = bool(existing_txn)
@@ -492,7 +492,44 @@ def helpdesk_dashboard():
 @app.route("/seller_dashboard")
 @seller_only
 def seller_dashboard():    
-    return render_template("seller_dashboard.html")
+    seller_email = session.get('email')
+    
+    try:
+        with get_db_connection() as conn:
+            total_balance = conn.execute('''
+                SELECT SUM(Payment) as total
+                FROM Transactions
+                WHERE Seller_Email = ?
+            ''', (seller_email,)).fetchone()['total']
+            
+            if total_balance is None:
+                total_balance = 0.0
+            else:
+                total_balance = float(total_balance)
+            
+            total_promo_fees = conn.execute('''
+                SELECT SUM(al.promotion_fee) as total_fees
+                FROM Auction_Listings al
+                JOIN Transactions t ON al.Seller_Email = t.Seller_Email AND al.Listing_ID = t.Listing_ID
+                WHERE al.Seller_Email = ? AND al.is_promoted = 1
+            ''', (seller_email,)).fetchone()['total_fees']
+            
+            if total_promo_fees is None:
+                total_promo_fees = 0.0
+            else:
+                total_promo_fees = float(total_promo_fees)
+            
+            actual_balance = total_balance - total_promo_fees
+                
+    except Exception as e:
+        actual_balance = 0.0
+        total_sales = 0.0
+        total_promo_fees = 0.0
+    
+    return render_template("seller_dashboard.html", 
+                          balance=actual_balance, 
+                          total_sales=total_balance, 
+                          total_promo_fees=total_promo_fees)
 
 @app.route('/')
 def index():
@@ -675,12 +712,11 @@ def register():
                 cursor.execute('INSERT INTO Users (email, password) VALUES (?, ?)', (email, pwd_hash))
 
                 # 2. Insert into Address table and get the primary key
+                addr_id = str(uuid.uuid4()).replace('-', '')  # Hash the address ID
                 cursor.execute(
-                    'INSERT INTO Address (zipcode, street_num, street_name) VALUES (?, ?, ?)',
-                    (zipcode, street_num, street_name)
+                    'INSERT INTO Address (address_id, zipcode, street_num, street_name) VALUES (?, ?, ?, ?)',
+                    (addr_id, zipcode, street_num, street_name)
                 )
-
-                addr_id = cursor.lastrowid
 
                 # 3. Depending on user type, insert into corresponding tables
 
@@ -694,7 +730,7 @@ def register():
                     cursor.execute('''
                         INSERT INTO Bidders (email, first_name, last_name, age, home_address_id, major)
                         VALUES (?, ?, ?, ?, ?, ?)''', 
-                    (email, first_name, last_name, age, addr_id, major))
+                    (email, first_name, last_name, age, addr_id, major)) 
 
                     # Credit Card Info
                     card_num = request.form.get('card_num', '').strip()
@@ -709,7 +745,7 @@ def register():
                             VALUES (?, ?, ?, ?, ?, ?)''', 
                         (card_num, card_type, exp_m, exp_y, cvv, email))
 
-                    # If student seller, must generate a seller request (This will not work for Prototype Demo b/c it is not required))
+                    # If student seller, must generate a seller request
                     if user_type == 'seller' and seller_sub_type == 'student':
                         bank_routing = request.form.get('bank_routing', '').strip()
                         bank_account = request.form.get('bank_account', '').strip()
@@ -728,7 +764,7 @@ def register():
                     business_name = request.form.get('business_name', '').strip()
                     business_phone = request.form.get('business_phone', '').strip()
 
-                    temp_desc = f"Routing:{bank_routing}|Account:{bank_account}|BizName:{business_name}|Phone:{business_phone}|AddrID:{addr_id}"
+                    temp_desc = f"Routing:{bank_routing}|Account:{bank_account}|BizName:{business_name}|Phone:{business_phone}|AddrID:{addr_id}"  # 使用哈希的地址ID
 
                     cursor.execute('''
                         INSERT INTO Requests (sender_email, helpdesk_staff_email, request_type, request_desc, request_status)
@@ -949,6 +985,17 @@ def listing(seller_email, listing_id):
                 (next_bid_id, seller_email, listing_id, b_email, bid_price)
             )
 
+            watchlist_exists = conn.execute('''
+                SELECT 1 FROM Watchlist 
+                WHERE Bidder_Email = ? AND Seller_Email = ? AND Listing_ID = ?
+            ''', (b_email, seller_email, listing_id)).fetchone()
+            
+            if not watchlist_exists:
+                conn.execute('''
+                    INSERT INTO Watchlist (Bidder_Email, Seller_Email, Listing_ID)
+                    VALUES (?, ?, ?)
+                ''', (b_email, seller_email, listing_id))
+
             updated_stats = conn.execute(
                 '''
                 SELECT COUNT(*) AS bid_count, MAX(Bid_Price) AS highest_bid
@@ -1006,6 +1053,19 @@ def listing(seller_email, listing_id):
             conn.commit()
             flash('Bid accepted.', 'success')
             return redirect(url_for('listing', seller_email=seller_email, listing_id=listing_id))
+        
+        # Check if the winning bidder has completed payment
+        payment_completed = False
+        if is_winner and b_email:
+            payment_record = conn.execute(
+                '''
+                SELECT 1
+                FROM Transactions
+                WHERE Seller_Email = ? AND Listing_ID = ? AND Bidder_Email = ?
+                ''',
+                (seller_email, listing_id, b_email)
+            ).fetchone()
+            payment_completed = payment_record is not None
 
     return render_template(
         'item_detail.html',
@@ -1021,9 +1081,9 @@ def listing(seller_email, listing_id):
         reviews=reviews,
         can_r=can_r,
         already_r=already_r,
-        in_watchlist=in_watchlist
+        in_watchlist=in_watchlist,
+        payment_completed=payment_completed
     )
-
 
 @app.route('/rate/<seller_email>/<int:listing_id>', methods=['POST'])
 @bidder_only
@@ -1569,7 +1629,7 @@ def bidder_profile():
     conn = get_db_connection()
 
     try:
-        bidder = conn.execute("""
+        bidder = conn.execute("""  
             SELECT 
                 B.email,
                 B.first_name,
@@ -1858,14 +1918,22 @@ def helpdesk_approve_category(request_id):
                 return redirect(url_for('helpdesk_dashboard'))
 
             desc = req['request_desc']
+            patterns = [
+                r"Please add a new category (.+) under (.+)",
+                r"Please ad a new category (.+) under (.+)", # To match the exits db wording
+            ]
+
             new_cat = None
             parent_cat = 'Root'
-
-            match = re.search(r"add a new category (.+) under (.+)", desc)
-            if match:
-                new_cat = match.group(1).strip()
-                parent_cat = match.group(2).strip()
-            else:
+            
+            for pattern in patterns:
+                match = re.search(pattern, desc)
+                if match:
+                    new_cat = match.group(1).strip()
+                    parent_cat = match.group(2).strip()
+                    break
+            
+            if not match:
                 flash('Could not parse category details from request description.', 'danger')
                 return redirect(url_for('helpdesk_dashboard'))
 

@@ -180,6 +180,15 @@
         <div class="winner-alert">
             <h3 class="text-success mb-2">🎉 Congratulations! You are the winner!</h3>
             <p class="mb-3">You have won this auction with a bid of ${{ '%.2f'|format(highest_bid) }}.</p>
+            
+            {% if not payment_completed %}
+                <a href="{{ url_for('auction_payment', seller_email=listing['Seller_Email'], listing_id=listing['Listing_ID']) }}" class="btn btn-primary btn-lg">
+                    Pay Now
+                </a>
+            {% else %}
+                <p class="text-success mb-0"><strong>Payment completed!</strong></p>
+            {% endif %}
+            
         </div>
     {% endif %}
 

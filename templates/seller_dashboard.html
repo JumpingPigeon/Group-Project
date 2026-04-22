@@ -122,16 +122,24 @@
             <div class="action-desc">View and manage all your active and sold listings</div>
         </a>
 
-        <a href="{{ url_for('seller_profile') }}" class="action-card">
-            <div class="action-icon">👤</div>
-            <div class="action-title">Update Profile</div>
-            <div class="action-desc">Manage your personal information and bank details.</div>
-        </a>
+        <div class="action-card" style="cursor: default;">
+            <div class="action-icon">💰</div>
+            <div class="action-title">Current Balance</div>
+            <div class="action-desc">Available: $<span id="seller-balance">{{ "%.2f"|format(balance|default(0.0)) }}</span></div>
+            <div class="action-desc">Total Sales: $<span id="total-sales">{{ "%.2f"|format(total_sales|default(0.0)) }}</span></div>
+            <div class="action-desc">Promotion Fees: $<span id="promo-fees">{{ "%.2f"|format(total_promo_fees|default(0.0)) }}</span></div>
+        </div>
 
         <a href="{{ url_for('seller_sales') }}" class="action-card">
             <div class="action-icon">📊</div>
             <div class="action-title">Sales History</div>
             <div class="action-desc">View and manage all your sales history</div>
+        </a>
+
+        <a href="{{ url_for('seller_profile') }}" class="action-card">
+            <div class="action-icon">👤</div>
+            <div class="action-title">Update Profile</div>
+            <div class="action-desc">Manage your personal information and bank details.</div>
         </a>
 
         <a href="{{ url_for('submit_request') }}" class="action-card">
