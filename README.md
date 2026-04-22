@@ -2,7 +2,7 @@
 Group Members: Hao Wang, Sirui Lim, Jinyang Liu, Xuan Liu
 
 # Overview
-This is a comprehensive online auction platform built with Flask, featuring three distinct user roles: **Bidders**, **Sellers**, and **Helpdesk Staff**. The system supports complete auction lifecycle management including user registration, category hierarchy, auction listing creation, bidding, payment processing, and helpdesk support.
+This is a comprehensive online auction platform built with Flask, featuring three distinct user roles: **Bidders**, **Sellers**, and **Helpdesk Staff**. The system supports complete auction management including user registration, category hierarchy, auction listing creation, bidding, payment processing, and helpdesk support.
 
 # Progress Tracking/Feature List
 1. Data population - Hao
@@ -25,7 +25,9 @@ This is a comprehensive online auction platform built with Flask, featuring thre
     - Edit an existing auction listing
 
 5. AuctionBidding (Bidder) - Jinyang
-    -
+    - Allow user to bid on an auction
+    - Pay using new or saved credit card
+
 6. UserRegistration - Jinyang
     - Allow user to select their role and register
     - helpdesk require system admin to internally register user
@@ -48,8 +50,9 @@ This is a comprehensive online auction platform built with Flask, featuring thre
     - Allow bidder to add an item to their wishlist
     - Able to place bid in the wishlist
 
-## Organization
+## Festures
 1. All webpage design in located at the templates folder.
+2. Added decorators to guard unauthorized access by roles.
 
 ## Instructions
 1. Open the code folder in VS code
@@ -58,10 +61,12 @@ This is a comprehensive online auction platform built with Flask, featuring thre
 4. Click ***http://127.0.0.1:5000/*** in terminal
 
 ## Reference
+- 431W Course Materials
 - [Flask Documentation](https://flask.palletsprojects.com/en/stable/#user-s-guide)
 - [Bootstrap Documentation](https://getbootstrap.com/docs/5.3/getting-started/introduction/)
 - [Bootstrap Documentation](https://www.runoob.com/bootstrap/bootstrap-tutorial.html)
 - [Bootstrap Documentation](https://www.w3schools.com/bootstrap/)
-- [SQLite Documentation] (https://www.sqlitetutorial.net/)
-- [HTML Tutorial] (https://www.w3schools.com/html/)
-- [CSS Tutorial] (https://www.w3schools.com/css/)
+- [SQLite Documentation](https://www.sqlitetutorial.net/)
+- [HTML Tutorial](https://www.w3schools.com/html/)
+- [CSS Tutorial](https://www.w3schools.com/css/)
+- [Partical JS](https://vincentgarreau.com/particles.js/)
