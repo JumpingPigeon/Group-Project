@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>My Wallet - Nittany Auction</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .navbar {
+            background-color: #fff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            padding: 15px 30px;
+        }
+        .navbar-brand {
+            font-weight: 700;
+            color: #001e44 !important;
+            font-size: 1.5rem;
+        }
+        .container {
+            margin-top: 30px;
+            max-width: 1000px;
+            flex-grow: 1;
+        }
+        .wallet-header {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            margin-bottom: 30px;
+        }
+        .wallet-title {
+            color: #001e44;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        .card-section {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            margin-bottom: 20px;
+            border-top: 4px solid #001e44;
+        }
+        .section-title {
+            color: #001e44;
+            font-weight: 700;
+            font-size: 1.3rem;
+            margin-bottom: 20px;
+        }
+        .credit-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 15px;
+            padding: 25px;
+            color: white;
+            margin-bottom: 15px;
+            position: relative;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease;
+        }
+        .credit-card:hover {
+            transform: translateY(-5px);
+        }
+        .credit-card.visa {
+            background: linear-gradient(135deg, #1a1f71 0%, #2d3561 100%);
+        }
+        .credit-card.mastercard {
+            background: linear-gradient(135deg, #eb001b 0%, #f79e1b 100%);
+        }
+        .credit-card.amex {
+            background: linear-gradient(135deg, #006fcf 0%, #00aeef 100%);
+        }
+        .credit-card.discover {
+            background: linear-gradient(135deg, #ff6000 0%, #ff8c00 100%);
+        }
+        .card-number {
+            font-size: 1.4rem;
+            letter-spacing: 2px;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+        }
+        .card-details {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+        .card-label {
+            font-size: 0.75rem;
+            opacity: 0.8;
+            text-transform: uppercase;
+        }
+        .card-value {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+        .card-type-badge {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+        .btn-custom {
+            border-radius: 30px;
+            padding: 10px 25px;
+            font-weight: 600;
+        }
+        .btn-primary-custom {
+            background-color: #001e44;
+            border: none;
+            color: white;
+        }
+        .btn-primary-custom:hover {
+            background-color: #002a5e;
+            color: white;
+        }
+        .btn-danger-custom {
+            background-color: #dc3545;
+            border: none;
+            color: white;
+        }
+        .btn-danger-custom:hover {
+            background-color: #c82333;
+            color: white;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 50px 20px;
+            color: #6b7280;
+        }
+        .empty-state-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-light">
+    <a class="navbar-brand" href="/">Nittany Auction</a>
+    <div class="ml-auto">
+        {% if session.get('user_id') %}
+            <span class="mr-3 text-muted">Welcome, {{ session.get('first_name') }}</span>
+            <a class="btn btn-outline-primary btn-sm px-3 mr-2" href="{{ url_for('bidder_dashboard') }}">Dashboard</a>
+            <a class="btn btn-outline-danger btn-sm" href="{{ url_for('logout') }}">Logout</a>
+        {% endif %}
+    </div>
+</nav>
+
+<div class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+            </div>
+        {% endfor %}
+    {% endwith %}
+
+    <div class="wallet-header">
+        <h2 class="wallet-title">💳 My Wallet</h2>
+        <p class="text-muted mb-0">Manage your credit cards for secure payments</p>
+    </div>
+
+    <div class="card-section">
+        <h4 class="section-title">Your Credit Cards</h4>
+        
+        {% if cards %}
+            {% for card in cards %}
+            <div class="credit-card {{ card.card_type.lower() }}">
+                <div class="card-type-badge">{{ card.card_type.upper() }}</div>
+                <div class="card-number">{{ card.masked_number }}</div>
+                <div class="card-details">
+                    <div>
+                        <div class="card-label">Card Holder</div>
+                        <div class="card-value">{{ session.get('first_name', 'Card Holder') }}</div>
+                    </div>
+                    <div>
+                        <div class="card-label">Expires</div>
+                        <div class="card-value">{{ card.expiry }}</div>
+                    </div>
+                    <div>
+                        <form method="POST" action="{{ url_for('remove_credit_card') }}" style="display: inline;" onsubmit="return confirm('Are you sure you want to remove this card?');">
+                            <input type="hidden" name="card_num" value="{{ card.credit_card_num }}">
+                            <button type="submit" class="btn btn-light btn-sm">Remove</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon">💳</div>
+                <h4>No Credit Cards Added</h4>
+                <p>Add a credit card to make faster payments on auctions.</p>
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="card-section">
+        <h4 class="section-title">Add New Card</h4>
+        
+        <form method="POST" action="{{ url_for('add_credit_card') }}">
+            <div class="form-row">
+                <div class="form-group col-md-8">
+                    <label class="font-weight-bold">Card Number</label>
+                    <input type="text" class="form-control" name="card_num" placeholder="1234 5678 9012 3456" required pattern="[0-9]{13,19}">
+                </div>
+                <div class="form-group col-md-4">
+                    <label class="font-weight-bold">Card Type</label>
+                    <select class="form-control" name="card_type" required>
+                        <option value="">Select Type</option>
+                        <option value="Visa">Visa</option>
+                        <option value="MasterCard">MasterCard</option>
+                        <option value="American Express">American Express</option>
+                        <option value="Discover">Discover</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group col-md-4">
+                    <label class="font-weight-bold">Expiration Month</label>
+                    <select class="form-control" name="exp_m" required>
+                        <option value="">Month</option>
+                        {% for m in range(1, 13) %}
+                        <option value="{{ m }}">{{ '%02d' % m }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group col-md-4">
+                    <label class="font-weight-bold">Expiration Year</label>
+                    <select class="form-control" name="exp_y" required>
+                        <option value="">Year</option>
+                        {% set current_year = now.year if now else 2026 %}
+                        {% for y in range(current_year, current_year + 25) %}
+                        <option value="{{ y }}">{{ y }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group col-md-4">
+                    <label class="font-weight-bold">CVV</label>
+                    <input type="password" class="form-control" name="cvv" placeholder="123" required pattern="[0-9]{3,4}" maxlength="4">
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary-custom btn-custom">
+                Add Card
+            </button>
+        </form>
+    </div>
+
+    <div class="text-center mt-4 mb-5">
+        <a href="{{ url_for('bidder_dashboard') }}" class="btn btn-outline-secondary btn-custom mr-2">Back to Dashboard</a>
+        <a href="/" class="btn btn-outline-secondary btn-custom">Back to Home</a>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
+</body>
+</html>

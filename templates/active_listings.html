@@ -39,7 +39,7 @@
                 <p><strong>Remaining Bids:</strong> {{ item.remaining_bids }}</p>
                 <p class="muted">{{ item.product_description }}</p>
                 <p>
-                    <a href="{{ url_for('bidder_auction_detail', seller_email=item.seller_email, listing_id=item.listing_id) }}">
+                    <a href="{{ url_for('listing', seller_email=item.seller_email, listing_id=item.listing_id) }}">
                         View and Bid
                     </a>
                 </p>

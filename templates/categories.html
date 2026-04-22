@@ -5,17 +5,77 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Browse Categories - Nittany Auction</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .navbar {
+            background-color: #fff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            padding: 15px 30px;
+        }
+        .navbar-brand {
+            font-weight: 700;
+            color: #001e44 !important;
+            font-size: 1.5rem;
+        }
+        .search-container {
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .search-box {
+            width: 100%;
+            max-width: 600px;
+            padding: 40px;
+            background: #fff;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+        .form-control-lg {
+            border-radius: 30px;
+            padding-left: 25px;
+        }
+        .btn-search {
+            border-radius: 30px;
+            padding-left: 30px;
+            padding-right: 30px;
+            background-color: #001e44;
+            border: none;
+        }
+        .btn-search:hover {
+            background-color: #003a88;
+        }
+    </style>
 </head>
-<body style="background-color: #f8f9fa;">
+<body>
 
-<nav class="navbar navbar-light bg-white shadow-sm px-4">
-    <a class="navbar-brand font-weight-bold" href="/">NittanyAuction</a>
-    <div class="ml-auto">
-        {% if session.get('email') %}
-            <a class="btn btn-outline-secondary btn-sm mr-2" href="{{ url_for('account_redirect') }}">Dashboard</a>
+<nav class="navbar navbar-light">
+        <div class="d-flex align-items-center">
+            <a class="navbar-brand mb-0" href="/">Nittany Auction</a>
+            <a href="{{ url_for('categories') }}" class="btn btn-outline-primary btn-sm ml-3">View All Categories</a>
+        </div>
+        <div class="ml-auto">
+        {% if session.get('user_id') %}
+            <span class="mr-3 text-muted">Welcome, {{ session.get('first_name') }}</span>
+            
+            {% if session.get('user_type') in ['bidder'] %}
+                <a class="btn btn-warning btn-sm px-3 mr-2" href="{{ url_for('watchlist') }}">
+                    ⭐ Watchlist
+                </a>
+            {% endif %}
+            
+            <a class="btn btn-info btn-sm px-3 mr-2" href="{{ url_for(session['user_type'] + '_dashboard') }}">
+                Dashboard
+            </a>
+            
             <a class="btn btn-outline-danger btn-sm" href="{{ url_for('logout') }}">Logout</a>
         {% else %}
-            <a class="btn btn-primary btn-sm" href="{{ url_for('login') }}">Login</a>
+            <a class="btn btn-primary px-4" href="{{ url_for('login') }}">Login/Register</a>
         {% endif %}
     </div>
 </nav>

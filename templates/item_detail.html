@@ -180,10 +180,6 @@
         <div class="winner-alert">
             <h3 class="text-success mb-2">🎉 Congratulations! You are the winner!</h3>
             <p class="mb-3">You have won this auction with a bid of ${{ '%.2f'|format(highest_bid) }}.</p>
-            <a href="{{ url_for('auction_payment', seller_email=listing['Seller_Email'], listing_id=listing['Listing_ID']) }}" 
-               class="btn btn-success btn-lg">
-                💳 Complete Payment Now
-            </a>
         </div>
     {% endif %}
 
@@ -306,17 +302,6 @@
             {% elif already_r %}
             <p class="muted">You already rated this seller today.</p>
             {% endif %}
-        <div class="card">
-            <h3>Place a Bid</h3>
-            {% if can_place_bid %}
-                <form method="POST">
-                    <label for="bid_price">Bid price</label><br>
-                    <input id="bid_price" name="bid_price" type="number" step="0.01" min="0" required>
-                    <button type="submit">Submit Bid</button>
-                </form>
-            {% elif already_r %}
-                <p class="text-muted mt-3">You already rated this seller today.</p>
-            {% endif %}
         </div>
     </div>
 
@@ -324,7 +309,7 @@
         <h3 class="mb-3" style="color: #001e44;">💰 Place a Bid</h3>
         
         {% if can_place_bid %}
-            <form method="POST" action="{{ url_for('bidder_auction_detail', seller_email=listing['Seller_Email'], listing_id=listing['Listing_ID']) }}">
+            <form method="POST" action="{{ url_for('listing', seller_email=listing['Seller_Email'], listing_id=listing['Listing_ID']) }}">
                 <div class="form-group">
                     <label for="bid_price"><strong>Your Bid Amount</strong></label>
                     <div class="input-group" style="max-width: 400px;">

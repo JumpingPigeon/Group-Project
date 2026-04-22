@@ -81,7 +81,7 @@
                 <div class="row">
                     <div class="col-md-3 form-group"><label>Street Num</label><input type="text" name="street_num" class="form-control"></div>
                     <div class="col-md-6 form-group"><label>Street Name</label><input type="text" name="street_name" class="form-control"></div>
-                    <div class="col-md-3 form-group"><label>Zipcode</label><input type="text" name="zipcode" class="form-control"></div>
+                    <div class="col-md-3 form-group"><label>Zipcode</label><input type="text" name="zipcode" class="form-control" maxlength="5" pattern="[0-9]{5}" title="Please enter a valid 5-digit zipcode"></div>
                 </div>
             </div>
 
@@ -97,10 +97,10 @@
                 <div class="section-title">Payment Method (Credit Card)</div>
                 <div class="form-group"><label>Card Number</label><input type="text" name="card_num" class="form-control"></div>
                 <div class="row">
-                    <div class="col-md-4 form-group"><label>Card Type</label><select name="card_type" class="form-control"><option>Visa</option><option>MasterCard</option><option>Amex</option></select></div>
-                    <div class="col-md-3 form-group"><label>Exp Month</label><input type="number" name="exp_m" class="form-control" placeholder="MM"></div>
-                    <div class="col-md-3 form-group"><label>Exp Year</label><input type="number" name="exp_y" class="form-control" placeholder="YYYY"></div>
-                    <div class="col-md-2 form-group"><label>CVV</label><input type="text" name="cvv" class="form-control"></div>
+                    <div class="col-md-4 form-group"><label>Card Type</label><select name="card_type" class="form-control"><option>Visa</option><option>MasterCard</option><option>Amex</option><option>Discover</option></select></div>
+                    <div class="col-md-3 form-group"><label>Exp Month</label><input type="number" name="exp_m" class="form-control" placeholder="MM" maxlength="2" min="1" max="12"></div>
+                    <div class="col-md-3 form-group"><label>Exp Year</label><input type="number" name="exp_y" class="form-control" placeholder="YYYY" maxlength="4" min="2026" max="2051"></div>
+                    <div class="col-md-2 form-group"><label>CVV</label><input type="text" name="cvv" class="form-control" maxlength="4"></div>
                 </div>
             </div>
 

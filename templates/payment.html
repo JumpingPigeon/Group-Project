@@ -4,53 +4,248 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Auction Payment</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
     <style>
-        body { font-family: Arial, sans-serif; margin: 0; background: #f5f7fb; }
-        .nav { background: #111827; color: #fff; padding: 12px 18px; }
-        .container { max-width: 700px; margin: 20px auto; padding: 0 16px; }
-        .card { background: #fff; border-radius: 10px; padding: 16px; margin-bottom: 14px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); }
-        .flash { margin-bottom: 12px; padding: 10px; border-radius: 8px; background: #eef2ff; }
-        input { width: 100%; padding: 8px; margin-bottom: 8px; }
-        button { padding: 9px 14px; cursor: pointer; }
-        a { color: #2563eb; text-decoration: none; }
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 0; 
+            background: #f8f9fa;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .navbar {
+            background-color: #fff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            padding: 15px 30px;
+        }
+        .navbar-brand {
+            font-weight: 700;
+            color: #001e44 !important;
+            font-size: 1.5rem;
+        }
+        .container { 
+            max-width: 800px; 
+            margin: 30px auto; 
+            padding: 0 16px;
+            flex-grow: 1;
+        }
+        .card { 
+            background: #fff; 
+            border-radius: 12px; 
+            padding: 25px; 
+            margin-bottom: 20px; 
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            border-top: 4px solid #001e44;
+        }
+        .card-title {
+            color: #001e44;
+            font-weight: 700;
+            font-size: 1.3rem;
+            margin-bottom: 20px;
+        }
+        .btn-custom {
+            border-radius: 30px;
+            padding: 10px 25px;
+            font-weight: 600;
+        }
+        .btn-primary-custom {
+            background-color: #001e44;
+            border: none;
+            color: white;
+        }
+        .btn-primary-custom:hover {
+            background-color: #002a5e;
+            color: white;
+        }
+        .rating-stars {
+            font-size: 2rem;
+            cursor: pointer;
+        }
+        .rating-stars span {
+            color: #ddd;
+            transition: color 0.2s;
+        }
+        .rating-stars span.active,
+        .rating-stars span:hover {
+            color: #ffc107;
+        }
+        .saved-card {
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .saved-card:hover {
+            border-color: #001e44;
+            background-color: #f8f9fa;
+        }
+        .saved-card.selected {
+            border-color: #001e44;
+            background-color: #e8f4fd;
+        }
+        .saved-card input[type="radio"] {
+            margin-right: 10px;
+        }
+        .card-icon {
+            font-size: 1.5rem;
+            margin-right: 10px;
+        }
+        .payment-method-section {
+            margin-bottom: 20px;
+        }
+        .payment-method-title {
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #001e44;
+        }
     </style>
 </head>
 <body>
-    <div class="nav">
-        <strong>NittanyAuction</strong> - Payment
-    </div>
+    <nav class="navbar navbar-light">
+        <a class="navbar-brand" href="/">Nittany Auction</a>
+        <div class="ml-auto">
+            {% if session.get('user_id') %}
+                <span class="mr-3 text-muted">Welcome, {{ session.get('first_name') }}</span>
+                <a class="btn btn-outline-primary btn-sm px-3 mr-2" href="{{ url_for('bidder_dashboard') }}">Dashboard</a>
+                <a class="btn btn-outline-danger btn-sm" href="{{ url_for('logout') }}">Logout</a>
+            {% endif %}
+        </div>
+    </nav>
+
     <div class="container">
         {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="flash">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="close" data-dismiss="alert">&times;</button>
+                </div>
+            {% endfor %}
         {% endwith %}
 
         <div class="card">
-            <h2>Complete Payment</h2>
-            <p><strong>Listing:</strong> {{ listing['Auction_Title'] }} ({{ listing['Product_Name'] }})</p>
-            <p><strong>Amount:</strong> ${{ '%.2f'|format(winning_bid) }}</p>
+            <h2 class="card-title">💳 Complete Payment</h2>
+            <p><strong>Listing:</strong> {{ listing['Auction_Title'] }}</p>
+            <p><strong>Product:</strong> {{ listing['Product_Name'] }}</p>
+            <p><strong>Amount:</strong> <span class="text-success font-weight-bold">${{ '%.2f'|format(winning_bid) }}</span></p>
 
-            {% if payment_done %}
-                <p>Payment already recorded for this auction.</p>
-            {% else %}
-                <form method="POST">
-                    <label>Card Number</label>
-                    <input type="text" name="card_number" placeholder="Demo input only" required>
-                    <label>Name on Card</label>
-                    <input type="text" name="card_name" placeholder="Demo input only" required>
-                    <button type="submit">Pay Now</button>
+                <form method="POST" id="paymentForm">
+                    <div class="payment-method-section">
+                        <div class="payment-method-title">Select Payment Method</div>
+                        
+                        {% if saved_cards and saved_cards|length > 0 %}
+                        <div class="mb-3">
+                            <strong>Saved Cards:</strong>
+                        </div>
+                        {% for card in saved_cards %}
+                        <div class="saved-card" onclick="selectCard('{{ card.card_id }}')">
+                            <input type="radio" name="payment_method" value="saved_{{ card.card_id }}" id="card_{{ card.card_id }}" style="display:none;">
+                            <div class="d-flex align-items-center">
+                                <span class="card-icon">
+                                    {% if card.card_type == 'Visa' %}💳
+                                    {% elif card.card_type == 'MasterCard' %}💳
+                                    {% elif card.card_type == 'American Express' %}💳
+                                    {% else %}💳{% endif %}
+                                </span>
+                                <div class="flex-grow-1">
+                                    <div><strong>{{ card.card_type }}</strong> ending in {{ card.credit_card_num[-4:] }}</div>
+                                    <div class="text-muted small">Expires: {{ '%02d'|format(card.expire_month) }}/{{ card.expire_year }}</div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        {% endif %}
+                        
+                        <div class="mt-3 mb-3">
+                            <strong>Or use a new card:</strong>
+                        </div>
+                        <div class="saved-card" onclick="selectNewCard()">
+                            <input type="radio" name="payment_method" value="new_card" id="new_card_radio" style="display:none;">
+                            <div class="d-flex align-items-center">
+                                <span class="card-icon">➕</span>
+                                <div class="flex-grow-1">
+                                    <div><strong>Add New Card</strong></div>
+                                    <div class="text-muted small">Enter new card details below</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="newCardFields" style="display: none;">
+                        <div class="form-group">
+                            <label class="font-weight-bold">Card Number</label>
+                            <input type="text" class="form-control" name="card_number" placeholder="1234 5678 9012 3456">
+                        </div>
+                        <div class="form-group">
+                            <label class="font-weight-bold">Name on Card</label>
+                            <input type="text" class="form-control" name="card_name" placeholder="John Doe">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group col-md-6">
+                                <label class="font-weight-bold">Expiry Month</label>
+                                <input type="number" class="form-control" name="exp_month" placeholder="MM" min="1" max="12">
+                            </div>
+                            <div class="form-group col-md-6">
+                                <label class="font-weight-bold">Expiry Year</label>
+                                <input type="number" class="form-control" name="exp_year" placeholder="YYYY" min="2024" max="2035">
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary-custom btn-custom">Pay Now</button>
                 </form>
             {% endif %}
         </div>
 
-        <p>
-            <a href="{{ url_for('bidder_auction_detail', seller_email=listing['Seller_Email'], listing_id=listing['Listing_ID']) }}">
-                Back to Auction
+        <div class="text-center">
+            <a href="{{ url_for('listing', seller_email=listing['Seller_Email'], listing_id=listing['Listing_ID']) }}" 
+               class="btn btn-outline-secondary btn-custom mr-2">
+                View Listing Details
             </a>
-        </p>
+            <a href="{{ url_for('bidder_dashboard') }}" class="btn btn-outline-secondary btn-custom">
+                Back to Dashboard
+            </a>
+        </div>
     </div>
+
+    <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
+    <script>
+        function selectCard(cardId) {
+            document.querySelectorAll('.saved-card').forEach(card => {card.classList.remove('selected');});
+            document.getElementById('card_' + cardId).checked = true;
+            document.getElementById('newCardFields').style.display = 'none';
+        }
+
+        function selectNewCard() {
+            document.querySelectorAll('.saved-card').forEach(card => {card.classList.remove('selected');});
+            document.getElementById('newCardFields').style.display = 'block';
+        }
+
+        document.getElementById('paymentForm').addEventListener('submit', function(e) {
+            const selectedMethod = document.querySelector('input[name="payment_method"]:checked');
+            if (!selectedMethod) {
+                e.preventDefault();
+                alert('Please select a payment method');
+                return false;
+            }
+            
+            if (selectedMethod.value === 'new_card') {
+                const cardNumber = document.querySelector('input[name="card_number"]').value;
+                const cardName = document.querySelector('input[name="card_name"]').value;
+                const expMonth = document.querySelector('input[name="exp_month"]').value;
+                const expYear = document.querySelector('input[name="exp_year"]').value;
+                const cardtype = document.querySelector('input[name="card_type"]').value;
+                
+                if (!cardNumber || !cardName || !expMonth || !expYear || !cardtype) {
+                    e.preventDefault();
+                    alert('Please fill in all card details');
+                    return false;
+                }
+            }
+        });
+    </script>
 </body>
 </html>

@@ -100,8 +100,11 @@
 <body>
 
 <nav class="navbar navbar-light">
-    <a class="navbar-brand" href="/">Nittany Auction</a>
-    <div class="ml-auto">
+        <div class="d-flex align-items-center">
+            <a class="navbar-brand mb-0" href="/">Nittany Auction</a>
+            <a href="{{ url_for('categories') }}" class="btn btn-outline-primary btn-sm ml-3">View All Categories</a>
+        </div>
+        <div class="ml-auto">
         {% if session.get('user_id') %}
             <span class="mr-3 text-muted">Welcome, {{ session.get('first_name') }}</span>
             
@@ -147,15 +150,21 @@
         {% if session.get('user_type') in ['bidder'] %}
         <a href="{{ url_for('watchlist') }}" class="action-card">
           <div class="action-icon">⭐</div>
-          <div class="action-title">My Watchlist</div>
-          <div class="action-desc">View and manage your saved auctions.</div>
+          <div class="action-title">My Watchlist/Bidding Room</div>
+          <div class="action-desc">View and manage your saved auctions and current bids.</div>
         </a>
         {% endif %}
 
-        <a href="{{ url_for('bidder_auctions') }}" class="action-card">
-          <div class="action-icon">🔥</div>
-          <div class="action-title">Active Auctions</div>
-          <div class="action-desc">View all currently active auctions.</div>
+        <a href="{{ url_for('bidder_wallet') }}" class="action-card">
+            <div class="action-icon">💳</div>
+            <div class="action-title">My Wallet</div>
+            <div class="action-desc">Manage your credit cards for secure payments.</div>
+        </a>
+        
+        <a href="{{ url_for('bidder_orders') }}" class="action-card">
+            <div class="action-icon">📦</div>
+            <div class="action-title">Order History</div>
+            <div class="action-desc">View your completed transactions and rate sellers.</div>
         </a>
 
         <a href="/bidder_profile" class="action-card">

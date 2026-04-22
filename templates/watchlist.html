@@ -137,8 +137,11 @@
 <body>
 
 <nav class="navbar navbar-light">
-    <a class="navbar-brand" href="/">Nittany Auction</a>
-    <div class="ml-auto">
+        <div class="d-flex align-items-center">
+            <a class="navbar-brand mb-0" href="/">Nittany Auction</a>
+            <a href="{{ url_for('categories') }}" class="btn btn-outline-primary btn-sm ml-3">View All Categories</a>
+        </div>
+        <div class="ml-auto">
         {% if session.get('user_id') %}
             <span class="mr-3 text-muted">Welcome, {{ session.get('first_name') }}</span>
             <a class="btn btn-outline-primary btn-sm px-3 mr-2" href="{{ url_for('bidder_dashboard') }}">Dashboard</a>

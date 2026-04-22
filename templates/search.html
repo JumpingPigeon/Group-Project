@@ -149,8 +149,11 @@
 <body>
 
 <nav class="navbar navbar-light">
-    <a class="navbar-brand" href="/">Nittany Auction</a>
-    <div class="ml-auto">
+        <div class="d-flex align-items-center">
+            <a class="navbar-brand mb-0" href="/">Nittany Auction</a>
+            <a href="{{ url_for('categories') }}" class="btn btn-outline-primary btn-sm ml-3">View All Categories</a>
+        </div>
+        <div class="ml-auto">
         {% if session.get('user_id') %}
             <span class="mr-3 text-muted">Welcome, {{ session.get('first_name') }}</span>
             
@@ -192,13 +195,13 @@
 
                 <div class="col-md-2">
                     <input type="number" name="min_price" class="form-control" 
-                           placeholder="Min Price" 
-                           value="{{ min_price or '' }}" step="0.01" min="0">
+                        placeholder="Min Current Bid" 
+                        value="{{ min_price or '' }}" step="0.01" min="0">
                 </div>
                 <div class="col-md-2">
                     <input type="number" name="max_price" class="form-control" 
-                           placeholder="Max Price" 
-                           value="{{ max_price or '' }}" step="0.01" min="0" max="9999999999999">
+                        placeholder="Max Current Bid" 
+                        value="{{ max_price or '' }}" step="0.01" min="0" max="9999999999999">
                 </div>
             </div>
 
@@ -215,7 +218,7 @@
                 for "<strong>{{ query }}</strong>"
             {% endif %}
             {% if min_price or max_price %}
-                | Price: 
+                | Current Bid Range: 
                 {% if min_price %}${{ min_price }}{% endif %}
                 {% if min_price and max_price %} - {% endif %}
                 {% if max_price %}${{ max_price }}{% endif %}
@@ -236,6 +239,11 @@
                         <span class="category-tag">📁 {{ item.Category_Name }}</span>
                     {% endif %}
                     
+                    <div class="mt-2">
+                        <span class="price-badge">${{ "%.2f"|format(item.current_bid) }}</span>
+                        <small class="text-muted ml-2">Current Bid</small>
+                    </div>
+                    
                     <div class="seller-info mt-2">
                         <strong>Seller:</strong> {{ item.Seller_First_Name }} {{ item.Seller_Last_Name }}
                     </div>
@@ -245,6 +253,10 @@
                             {{ item.Description[:100] }}{% if item.Description|length > 100 %}...{% endif %}
                         </p>
                     {% endif %}
+                    
+                    <div class="text-muted small mt-2">
+                        <strong>Bids:</strong> {{ item.bid_count }} / {{ item.Max_bids }}
+                    </div>
                     
                     <div class="card-actions">
                         {% if session.get('user_type') in ['bidder'] %}

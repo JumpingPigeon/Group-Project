@@ -148,6 +148,40 @@ def login_required(original_function):
         return original_function(*args, **kwargs) # If already logged in
     return wrapper
 
+def bidder_only(original_function):
+    @wraps(original_function)
+    @login_required
+    def wrapper(*args, **kwargs):
+        role = str(session.get('user_type', '')).strip().lower()
+        if role not in ('bidder', 'buyer'):
+            flash('Access denied. Bidder access required.', 'danger')
+            return redirect(url_for('login'))
+        return original_function(*args, **kwargs)
+    return wrapper
+
+def seller_only(original_function):
+    @wraps(original_function)
+    @login_required
+    def wrapper(*args, **kwargs):
+        role = str(session.get('user_type', '')).strip().lower()
+        if role != 'seller':
+            flash('Access denied. Seller access required.', 'danger')
+            return redirect(url_for('login'))
+        return original_function(*args, **kwargs)
+    return wrapper
+
+def helpdesk_only(original_function):
+    @wraps(original_function)
+    @login_required
+    def wrapper(*args, **kwargs):
+        role = str(session.get('user_type', '')).strip().lower()
+        if role != 'helpdesk':
+            flash('Access denied. Helpdesk access required.', 'danger')
+            return redirect(url_for('login'))
+        return original_function(*args, **kwargs)
+    return wrapper
+
+
 def dashboard_endpoint(user_type):
     if user_type is None:
         return 'login'
@@ -158,245 +192,162 @@ def dashboard_endpoint(user_type):
 
 
 @app.route('/bidder_dashboard')
-@login_required
+@bidder_only
 def bidder_dashboard():
-    if session.get('user_type') != 'bidder':
-        flash('Access denied.', 'danger')
-        return redirect(url_for('login'))
-
     return render_template(
         'bidder_dashboard.html',
         email=session.get('email'),
         first_name=session.get('first_name')
     )
 
-
-@app.route('/bidder/auctions')
-@login_required
-def bidder_auctions():
-    role = str(session.get('user_type', '')).strip().lower()
-    if role not in ('bidder'):
-        flash('Only bidders can place bids.', 'danger')
-        return redirect(url_for('login'))
-
-    with get_db_connection() as conn:
-        listings = conn.execute(
-            '''
-            SELECT Seller_Email, Listing_ID, Category, Auction_Title, Product_Name,
-                   Product_Description, Max_bids, Status
-            FROM Auction_Listings
-            WHERE Status = 1
-            ORDER BY Listing_ID DESC
-            '''
-        ).fetchall()
-
-        listing_dicts = []
-        for listing in listings:
-            bid_stats = conn.execute(
-                '''
-                SELECT COUNT(*) AS bid_count, MAX(Bid_Price) AS highest_bid
-                FROM Bids
-                WHERE Seller_Email = ? AND Listing_ID = ?
-                ''',
-                (listing['Seller_Email'], listing['Listing_ID'])
-            ).fetchone()
-            bid_count = int(bid_stats['bid_count'] or 0)
-            remaining_bids = max(int(listing['Max_bids']) - bid_count, 0)
-            listing_dicts.append({
-                'seller_email': listing['Seller_Email'],
-                'listing_id': listing['Listing_ID'],
-                'category': listing['Category'],
-                'auction_title': listing['Auction_Title'],
-                'product_name': listing['Product_Name'],
-                'product_description': listing['Product_Description'],
-                'highest_bid': float(bid_stats['highest_bid'] or 0),
-                'max_bids': int(listing['Max_bids']),
-                'remaining_bids': remaining_bids
-            })
-
-    return render_template('active_listings.html', listings=listing_dicts)
+@app.route('/bidder/wallet')
+@bidder_only
+def bidder_wallet():
+    user_email = session.get('email')
+    
+    try:
+        with get_db_connection() as conn:
+            cards = conn.execute('''
+                SELECT credit_card_num, card_type, expire_month, expire_year
+                FROM Credit_Cards
+                WHERE Owner_email = ?
+                ORDER BY card_type, expire_year, expire_month
+            ''', (user_email,)).fetchall()
+            
+            cards_list = []
+            for card in cards:
+                card_dict = dict(card)
+                masked_num = "**** **** **** " + card['credit_card_num'][-4:]
+                card_dict['masked_number'] = masked_num
+                card_dict['expiry'] = f"{card['expire_month']:02d}/{card['expire_year']}"
+                cards_list.append(card_dict)
+                
+        return render_template('wallet.html', cards=cards_list)
+    except Exception as e:
+        flash(f'Error loading wallet: {str(e)}', 'danger')
+        return redirect(url_for('bidder_dashboard'))
 
 
-@app.route('/bidder/auction/<seller_email>/<int:listing_id>', methods=['GET', 'POST'])
-@login_required
-def bidder_auction_detail(seller_email, listing_id):
-    role = str(session.get('user_type', '')).strip().lower()
-    bidder_email = session.get('email')
-    if role not in ('bidder'):
-        flash('Only bidders can place bids.', 'danger')
-        return redirect(url_for('login'))
+@app.route('/bidder/orders')
+@bidder_only
+def bidder_orders():
+    user_email = session.get('email')
+    
+    try:
+        with get_db_connection() as conn:
+            orders = conn.execute('''
+                SELECT 
+                    t.Transaction_ID,
+                    t.Seller_Email,
+                    t.Listing_ID,
+                    t.Bidder_Email,
+                    t.Date,
+                    t.Payment,
+                    al.Auction_Title,
+                    al.Product_Name,
+                    al.Status,
+                    COALESCE(bidder.first_name, lv.Business_Name, 'Unknown') as Seller_First_Name,
+                    COALESCE(bidder.last_name, '') as Seller_Last_Name,
+                    (SELECT COUNT(*) FROM Ratings r 
+                     WHERE r.Seller_Email = t.Seller_Email 
+                     AND r.Bidder_Email = t.Bidder_Email 
+                     AND r.Date = t.Date) as has_rated
+                FROM Transactions t
+                JOIN Auction_Listings al ON t.Seller_Email = al.Seller_Email AND t.Listing_ID = al.Listing_ID
+                LEFT JOIN Bidders bidder ON t.Seller_Email = bidder.email
+                LEFT JOIN Local_Vendors lv ON t.Seller_Email = lv.Email
+                WHERE t.Bidder_Email = ?
+                ORDER BY t.Date DESC
+            ''', (user_email,)).fetchall()
+            
+            orders_list = []
+            for order in orders:
+                order_dict = dict(order)
+                order_dict['Payment'] = float(order_dict['Payment']) if order_dict['Payment'] else 0.0
+                orders_list.append(order_dict)
+                
+        return render_template('order_history.html', orders=orders_list)
+    except Exception as e:
+        flash(f'Error loading order history: {str(e)}', 'danger')
+        return redirect(url_for('bidder_dashboard'))
 
-    with get_db_connection() as conn:
-        listing = conn.execute(
-            '''
-            SELECT Seller_Email, Listing_ID, Category, Auction_Title, Product_Name,
-                   Product_Description, Reserve_Price, Max_bids, Status
-            FROM Auction_Listings
-            WHERE Seller_Email = ? AND Listing_ID = ?
-            ''',
-            (seller_email, listing_id)
-        ).fetchone()
 
-        if not listing:
-            flash('Auction listing not found.', 'danger')
-            return redirect(url_for('bidder_auctions'))
-
-        bid_stats = conn.execute(
-            '''
-            SELECT COUNT(*) AS bid_count, MAX(Bid_Price) AS highest_bid
-            FROM Bids
-            WHERE Seller_Email = ? AND Listing_ID = ?
-            ''',
-            (seller_email, listing_id)
-        ).fetchone()
-
-        bid_count = int(bid_stats['bid_count'] or 0)
-        highest_bid = float(bid_stats['highest_bid'] or 0)
-        max_bids = int(listing['Max_bids'])
-        remaining_bids = max(max_bids - bid_count, 0)
-        reserve_price = parse_money(listing['Reserve_Price'])
-
-        recent_bids = conn.execute(
-            '''
-            SELECT Bid_ID, Bidder_Email, Bid_Price
-            FROM Bids
-            WHERE Seller_Email = ? AND Listing_ID = ?
-            ORDER BY Bid_ID DESC
-            LIMIT 10
-            ''',
-            (seller_email, listing_id)
-        ).fetchall()
-
-        last_bid = conn.execute(
-            '''
-            SELECT Bidder_Email
-            FROM Bids
-            WHERE Seller_Email = ? AND Listing_ID = ?
-            ORDER BY Bid_ID DESC
-            LIMIT 1
-            ''',
-            (seller_email, listing_id)
-        ).fetchone()
-
-        winner = conn.execute(
-            '''
-            SELECT Bidder_Email, Bid_Price
-            FROM Bids
-            WHERE Seller_Email = ? AND Listing_ID = ?
-            ORDER BY Bid_Price DESC, Bid_ID DESC
-            LIMIT 1
-            ''',
-            (seller_email, listing_id)
-        ).fetchone()
-
-        can_place_bid = (int(listing['Status']) == 1 and remaining_bids > 0)
-
-        if request.method == 'POST':
-            bid_raw = request.form.get('bid_price', '').strip()
-            try:
-                bid_price = float(bid_raw)
-            except ValueError:
-                flash('Invalid bid amount.', 'danger')
-                return redirect(url_for('bidder_auction_detail', seller_email=seller_email, listing_id=listing_id))
-
-            if int(listing['Status']) != 1 or remaining_bids <= 0:
-                flash('Bid rejected: auction ended.', 'warning')
-                return redirect(url_for('bidder_auction_detail', seller_email=seller_email, listing_id=listing_id))
-
-            if bid_price < highest_bid + 1:
-                flash(f'Bid rejected: bid must be at least ${highest_bid + 1:.2f}.', 'warning')
-                return redirect(url_for('bidder_auction_detail', seller_email=seller_email, listing_id=listing_id))
-
-            if last_bid and last_bid['Bidder_Email'] == bidder_email:
-                flash('Bid rejected: you must wait for another bidder.', 'warning')
-                return redirect(url_for('bidder_auction_detail', seller_email=seller_email, listing_id=listing_id))
-
-            if bidder_email == seller_email:
-                flash('Bid rejected: seller cannot bid on own listing.', 'warning')
-                return redirect(url_for('bidder_auction_detail', seller_email=seller_email, listing_id=listing_id))
-
-            next_bid_id = conn.execute('SELECT COALESCE(MAX(Bid_ID), 0) + 1 FROM Bids').fetchone()[0]
-            conn.execute(
-                '''
-                INSERT INTO Bids (Bid_ID, Seller_Email, Listing_ID, Bidder_Email, Bid_Price)
-                VALUES (?, ?, ?, ?, ?)
-                ''',
-                (next_bid_id, seller_email, listing_id, bidder_email, bid_price)
-            )
-
-            updated_stats = conn.execute(
-                '''
-                SELECT COUNT(*) AS bid_count, MAX(Bid_Price) AS highest_bid
-                FROM Bids
-                WHERE Seller_Email = ? AND Listing_ID = ?
-                ''',
-                (seller_email, listing_id)
-            ).fetchone()
-
-            updated_bid_count = int(updated_stats['bid_count'] or 0)
-            updated_highest_bid = float(updated_stats['highest_bid'] or 0)
-
-            if updated_bid_count >= max_bids:
-                if updated_highest_bid >= reserve_price:
-                    conn.execute(
-                        '''
-                        UPDATE Auction_Listings
-                        SET Status = 2
-                        WHERE Seller_Email = ? AND Listing_ID = ?
-                        ''',
-                        (seller_email, listing_id)
-                    )
-                    conn.commit()
-
-                    winning_bid = conn.execute(
-                        '''
-                        SELECT Bidder_Email, Bid_Price
-                        FROM Bids
-                        WHERE Seller_Email = ? AND Listing_ID = ?
-                        ORDER BY Bid_Price DESC, Bid_ID DESC
-                        LIMIT 1
-                        ''',
-                        (seller_email, listing_id)
-                    ).fetchone()
-
-                    if winning_bid and winning_bid['Bidder_Email'] == bidder_email:
-                        flash('Bid accepted. Auction ended and you won. Please complete payment.', 'success')
-                        return redirect(url_for('auction_payment', seller_email=seller_email, listing_id=listing_id))
-
-                    flash('Bid accepted. Auction ended.', 'success')
-                    return redirect(url_for('bidder_auction_detail', seller_email=seller_email, listing_id=listing_id))
-
-                conn.execute(
-                    '''
-                    UPDATE Auction_Listings
-                    SET Status = 0
-                    WHERE Seller_Email = ? AND Listing_ID = ?
-                    ''',
-                    (seller_email, listing_id)
-                )
-                conn.commit()
-                flash('Bid accepted. Auction ended but reserve price not met.', 'warning')
-                return redirect(url_for('bidder_auction_detail', seller_email=seller_email, listing_id=listing_id))
-
+@app.route('/wallet/add_card', methods=['POST'])
+@bidder_only
+def add_credit_card():
+    user_email = session.get('email')
+    
+    try:
+        card_num = request.form.get('card_num', '').strip()
+        card_type = request.form.get('card_type', '').strip()
+        exp_m = request.form.get('exp_m', '').strip()
+        exp_y = request.form.get('exp_y', '').strip()
+        cvv = request.form.get('cvv', '').strip()
+        
+        if not all([card_num, card_type, exp_m, exp_y, cvv]):
+            flash('All fields are required.', 'danger')
+            return redirect(url_for('bidder_wallet'))
+        
+        try:
+            exp_month = int(exp_m)
+            exp_year = int(exp_y)
+            if exp_month < 1 or exp_month > 12:
+                flash('Invalid expiration month.', 'danger')
+                return redirect(url_for('bidder_wallet'))
+        except ValueError:
+            flash('Invalid expiration date format.', 'danger')
+            return redirect(url_for('bidder_wallet'))
+        
+        with get_db_connection() as conn:
+            existing = conn.execute('''
+                SELECT 1 FROM Credit_Cards 
+                WHERE credit_card_num = ? AND Owner_email = ?
+            ''', (card_num, user_email)).fetchone()
+            
+            if existing:
+                flash('This card is already in your wallet.', 'warning')
+                return redirect(url_for('bidder_wallet'))
+            
+            conn.execute('''
+                INSERT INTO Credit_Cards (credit_card_num, card_type, expire_month, expire_year, security_code, Owner_email)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (card_num, card_type, exp_month, exp_year, cvv, user_email))
             conn.commit()
-            flash('Bid accepted.', 'success')
-            return redirect(url_for('bidder_auction_detail', seller_email=seller_email, listing_id=listing_id))
+            
+        flash('Credit card added successfully!', 'success')
+        return redirect(url_for('bidder_wallet'))
+        
+    except Exception as e:
+        flash(f'Error adding card: {str(e)}', 'danger')
+        import traceback
+        traceback.print_exc()
+        return redirect(url_for('bidder_wallet'))
 
-        is_winner = bool(winner and winner['Bidder_Email'] == bidder_email and int(listing['Status']) == 2)
-        return render_template(
-            'item_detail.html',
-            listing=listing,
-            recent_bids=recent_bids,
-            bid_count=bid_count,
-            highest_bid=highest_bid,
-            remaining_bids=remaining_bids,
-            can_place_bid=can_place_bid,
-            is_winner=is_winner
-        )
+
+@app.route('/wallet/remove_card', methods=['POST'])
+@bidder_only
+def remove_credit_card():
+    user_email = session.get('email')
+    card_num = request.form.get('card_num', '').strip()
+    
+    try:
+        with get_db_connection() as conn:
+            conn.execute('''
+                DELETE FROM Credit_Cards 
+                WHERE credit_card_num = ? AND Owner_email = ?
+            ''', (card_num, user_email))
+            conn.commit()
+            
+        flash('Credit card removed successfully.', 'success')
+        return redirect(url_for('bidder_wallet'))
+        
+    except Exception as e:
+        flash(f'Error removing card: {str(e)}', 'danger')
+        return redirect(url_for('bidder_wallet'))
 
 
 @app.route('/bidder/auction/<seller_email>/<int:listing_id>/payment', methods=['GET', 'POST'])
-@login_required
+@bidder_only
 def auction_payment(seller_email, listing_id):
     role = str(session.get('user_type', '')).strip().lower()
     bidder_email = session.get('email')
@@ -415,7 +366,7 @@ def auction_payment(seller_email, listing_id):
         ).fetchone()
         if not listing:
             flash('Auction listing not found.', 'danger')
-            return redirect(url_for('bidder_auctions'))
+            return redirect(url_for('bidder_dashboard'))
 
         winning_bid = conn.execute(
             '''
@@ -430,7 +381,7 @@ def auction_payment(seller_email, listing_id):
 
         if not winning_bid or winning_bid['Bidder_Email'] != bidder_email:
             flash('Only the winning bidder can access payment.', 'danger')
-            return redirect(url_for('bidder_auction_detail', seller_email=seller_email, listing_id=listing_id))
+            return redirect(url_for('listing', seller_email=seller_email, listing_id=listing_id))
 
         existing_txn = conn.execute(
             '''
@@ -442,10 +393,25 @@ def auction_payment(seller_email, listing_id):
             (seller_email, listing_id, bidder_email)
         ).fetchone()
 
+        saved_cards = conn.execute('''
+            SELECT credit_card_num, card_type, expire_month, expire_year
+            FROM Credit_Cards
+            WHERE Owner_email = ?
+            ORDER BY card_type, expire_year, expire_month
+        ''', (bidder_email,)).fetchall()
+        
+        cards_list = []
+        for card in saved_cards:
+            card_dict = dict(card)
+            masked_num = "**** **** **** " + card['credit_card_num'][-4:]
+            card_dict['masked_number'] = masked_num
+            card_dict['card_id'] = f"{card['credit_card_num'][-4:]}_{card['expire_month']}_{card['expire_year']}"
+            cards_list.append(card_dict)
+
         if request.method == 'POST':
             if existing_txn:
                 flash('Payment already recorded.', 'info')
-                return redirect(url_for('bidder_auction_detail', seller_email=seller_email, listing_id=listing_id))
+                return redirect(url_for('listing', seller_email=seller_email, listing_id=listing_id))
 
             next_txn_id = conn.execute('SELECT COALESCE(MAX(Transaction_ID), 0) + 1 FROM Transactions').fetchone()[0]
             conn.execute(
@@ -458,19 +424,38 @@ def auction_payment(seller_email, listing_id):
                     seller_email,
                     listing_id,
                     bidder_email,
-                    datetime.now().strftime('%m/%d/%y'),
+                    date.today().strftime('%m/%d/%y'),
                     float(winning_bid['Bid_Price'])
                 )
             )
             conn.commit()
             flash('Payment completed and transaction recorded.', 'success')
-            return redirect(url_for('bidder_auction_detail', seller_email=seller_email, listing_id=listing_id))
+            return redirect(url_for('listing', seller_email=seller_email, listing_id=listing_id))
+
+        can_r = bool(existing_txn)
+        already_r = False
+        today = date.today().strftime('%m/%d/%y')
+        
+        if can_r:
+            dup = conn.execute(
+                '''
+                SELECT 1 FROM Ratings
+                WHERE Bidder_Email = ? AND Seller_Email = ? AND Date = ?
+                ''',
+                (bidder_email, seller_email, today)
+            ).fetchone()
+            already_r = (dup is not None)
 
         return render_template(
             'payment.html',
             listing=listing,
             winning_bid=float(winning_bid['Bid_Price']),
-            payment_done=bool(existing_txn)
+            payment_done=bool(existing_txn),
+            can_r=can_r,
+            already_r=already_r,
+            seller_email=seller_email,
+            listing_id=listing_id,
+            saved_cards=cards_list
         )
 
 @app.route("/helpdesk_dashboard")
@@ -505,12 +490,8 @@ def helpdesk_dashboard():
                            my_assigned = my_assigned)
 
 @app.route("/seller_dashboard")
-@login_required
-def seller_dashboard():
-    if session.get('user_type') != 'seller':
-        flash('Access denied. Seller privileges required.', 'danger')
-        return redirect(url_for('login'))
-    
+@seller_only
+def seller_dashboard():    
     return render_template("seller_dashboard.html")
 
 @app.route('/')
@@ -519,13 +500,13 @@ def index():
 
 @app.route('/search')
 def search():
-    query = request.args.get('q', '').strip() # Get keyword search query
-    search_field = request.args.get('search_field', 'all').strip() # Get the specific field to search in (title, product_name, description, category, seller_name, or all)
+    query = request.args.get('q', '').strip()
+    search_field = request.args.get('search_field', 'all').strip()
     min_price = request.args.get('min_price', '').strip()
     max_price = request.args.get('max_price', '').strip()
     
     user_email = session.get('user_id')
-    items = []  # Initialize items to empty list
+    items = []
     
     try:
         with get_db_connection() as conn:
@@ -535,7 +516,6 @@ def search():
                     al.Listing_ID, 
                     al.Auction_Title, 
                     al.Product_Name, 
-                    al.Reserve_Price, 
                     al.Max_bids, 
                     al.Status,
                     al.Product_Description as Description,
@@ -554,7 +534,6 @@ def search():
             params = []
             conditions = []
             
-            # Keyword search across multiple fields
             if query:
                 like_query = f"%{query}%"
                 
@@ -573,7 +552,7 @@ def search():
                 elif search_field == 'seller_name':
                     conditions.append("(COALESCE(bidder.first_name, '') LIKE ? OR COALESCE(bidder.last_name, '') LIKE ? OR COALESCE(lv.Business_Name, '') LIKE ?)")
                     params.extend([like_query, like_query, like_query])
-                else:  # 'all' or default
+                else:
                     search_conditions = [
                         "al.Auction_Title LIKE ?",
                         "al.Product_Name LIKE ?",
@@ -584,39 +563,57 @@ def search():
                         "COALESCE(lv.Business_Name, '') LIKE ?",
                     ]
                     conditions.append("(" + " OR ".join(search_conditions) + ")")
-                    params.extend([like_query] * len(search_conditions)) # Add the same like_query for each search condition
+                    params.extend([like_query] * len(search_conditions))
             
             if min_price:
                 try:
                     min_val = float(min_price)
-                    conditions.append("al.Reserve_Price >= ?")
+                    conditions.append("COALESCE((SELECT MAX(b.Bid_price) FROM Bids b WHERE b.Seller_Email = al.Seller_Email AND b.Listing_ID = al.Listing_ID), 0) >= ?")
                     params.append(min_val)
-                except ValueError: # If not a number than ignore the min price filter
+                except ValueError:
                     pass
 
             if max_price:
                 try:
                     max_val = float(max_price)
-                    conditions.append("al.Reserve_Price <= ?")
+                    conditions.append("COALESCE((SELECT MAX(b.Bid_price) FROM Bids b WHERE b.Seller_Email = al.Seller_Email AND b.Listing_ID = al.Listing_ID), 0) <= ?")
                     params.append(max_val)
-                except ValueError: # If not a number than ignore the max price filter
+                except ValueError:
                     pass
 
             if conditions:
-                base_query += " AND " + " AND ".join(conditions) # Combine all addtional conditions with AND
+                base_query += " AND " + " AND ".join(conditions)
             
-            base_query += " ORDER BY al.Listing_ID DESC" # Show newest listings first
+            base_query += " ORDER BY al.Listing_ID DESC"
             
-            items = conn.execute(base_query, params).fetchall() # Get all matching items
+            items = conn.execute(base_query, params).fetchall()
 
-            # Convert Reserve_Price from string to float for each item
             items_list = []
             for item in items:
                 item_dict = dict(item)
-                item_dict['Reserve_Price'] = parse_money(item_dict['Reserve_Price'])
+                
+                try:
+                    item_dict['current_bid'] = float(item_dict['current_bid']) if item_dict['current_bid'] else 0.0
+                except (ValueError, TypeError):
+                    item_dict['current_bid'] = 0.0
+                
+                try:
+                    item_dict['bid_count'] = int(item_dict['bid_count']) if item_dict['bid_count'] else 0
+                except (ValueError, TypeError):
+                    item_dict['bid_count'] = 0
+                
+                try:
+                    item_dict['Max_bids'] = int(item_dict['Max_bids']) if item_dict['Max_bids'] else 0
+                except (ValueError, TypeError):
+                    item_dict['Max_bids'] = 0
+                
+                try:
+                    item_dict['Status'] = int(item_dict['Status']) if item_dict['Status'] else 0
+                except (ValueError, TypeError):
+                    item_dict['Status'] = 0
+                
                 items_list.append(item_dict)
                         
-            # Find all watchlist items for the user in one query to avoid N+1 problem
             if user_email:
                 watchlist_items = conn.execute('''
                     SELECT Seller_Email, Listing_ID FROM Watchlist WHERE Bidder_Email = ?
@@ -626,7 +623,6 @@ def search():
                 
                 items_with_watchlist = []
                 for item in items_list:
-                    # Add in_watchlist flag to already converted items
                     item['in_watchlist'] = (item['Seller_Email'], item['Listing_ID']) in watchlist_set
                     items_with_watchlist.append(item)
                 
@@ -635,13 +631,9 @@ def search():
                 items = items_list
             
     except Exception as e:
-        print(f"\n=== SEARCH ERROR ===")
-        print(f"Error: {str(e)}")
-        print(f"====================\n")
         flash(f'Error performing search: {str(e)}', 'danger')
         items = []
     
-    # Return the search results along with the original query and price filters to repopulate the search form
     return render_template('search.html', 
                         items=items, 
                         query=query,
@@ -786,7 +778,7 @@ def category_detail(name):
         ).fetchall()
     return render_template('category_detail.html', category_name=name, breadcrumb=bc, subcategories=sc, listings=l)
 
-@app.route('/listing/<seller_email>/<int:listing_id>')
+@app.route('/listing/<seller_email>/<int:listing_id>', methods=['GET', 'POST'])
 def listing(seller_email, listing_id):
     with get_db_connection() as conn:
         r = conn.execute(
@@ -797,7 +789,7 @@ def listing(seller_email, listing_id):
             (seller_email, listing_id)).fetchone()
         if r == None:
             return "Listing not found", 404
-        #seller avg rating + count
+        
         s = conn.execute(
                 '''
                 SELECT ROUND(AVG(Rating), 1) AS avg_rating, COUNT(*) AS num_ratings
@@ -811,7 +803,7 @@ def listing(seller_email, listing_id):
         else:
             avg_rating = None
             num_ratings = 0
-        #last 10 reviews
+        
         reviews = conn.execute(
                 '''
                 SELECT Bidder_Email, Date, Rating, Rating_Desc
@@ -822,9 +814,6 @@ def listing(seller_email, listing_id):
                 ''',
                 (seller_email,)).fetchall()
         
-
-        #test
-        # recent bids
         rb = conn.execute(
             '''
             SELECT Bid_ID, Bidder_Email, Bid_Price
@@ -835,7 +824,6 @@ def listing(seller_email, listing_id):
             ''',
             (seller_email, listing_id)).fetchall()
 
-        # count + highest bid
         row = conn.execute(
             '''
             SELECT COUNT(*) AS bid_count, MAX(Bid_Price) AS highest_bid
@@ -853,6 +841,7 @@ def listing(seller_email, listing_id):
         else:
             bid_count = 0
             highest_bid = 0.0
+        
         max_bids = int(r["Max_bids"] or 0)
         remaining_bids = max_bids - int(bid_count)
         if remaining_bids < 0:
@@ -861,16 +850,12 @@ def listing(seller_email, listing_id):
             can_place_bid = True
         else:
             can_place_bid = False
-        #test
         
-        
-        #eligibility + duplicate today
         can_r = False
         already_r = False
         b_email = session.get("email")
         today = date.today().isoformat()
         
-        # Check if item is in watchlist
         in_watchlist = False
         if b_email:
             wl_check = conn.execute(
@@ -903,6 +888,124 @@ def listing(seller_email, listing_id):
                     ''',
                     (b_email, seller_email, today)).fetchone()
                 already_r = (dup is not None)
+        
+        last_bid = conn.execute(
+            '''
+            SELECT Bidder_Email
+            FROM Bids
+            WHERE Seller_Email = ? AND Listing_ID = ?
+            ORDER BY Bid_ID DESC
+            LIMIT 1
+            ''',
+            (seller_email, listing_id)
+        ).fetchone()
+
+        winner = conn.execute(
+            '''
+            SELECT Bidder_Email, Bid_Price
+            FROM Bids
+            WHERE Seller_Email = ? AND Listing_ID = ?
+            ORDER BY Bid_Price DESC, Bid_ID DESC
+            LIMIT 1
+            ''',
+            (seller_email, listing_id)
+        ).fetchone()
+
+        is_winner = bool(winner and b_email and winner['Bidder_Email'] == b_email and int(r['Status']) == 2)
+
+        if request.method == 'POST' and session.get('user_type') == 'bidder' and b_email:
+            bid_raw = request.form.get('bid_price', '').strip()
+            try:
+                bid_price = float(bid_raw)
+            except ValueError:
+                flash('Invalid bid amount.', 'danger')
+                return redirect(url_for('listing', seller_email=seller_email, listing_id=listing_id))
+
+            reserve_price = parse_money(r['Reserve_Price'])
+
+            if int(r['Status']) != 1 or remaining_bids <= 0:
+                flash('Bid rejected: auction ended.', 'warning')
+                return redirect(url_for('listing', seller_email=seller_email, listing_id=listing_id))
+
+            if bid_price < highest_bid + 1:
+                flash(f'Bid rejected: bid must be at least ${highest_bid + 1:.2f}.', 'warning')
+                return redirect(url_for('listing', seller_email=seller_email, listing_id=listing_id))
+
+            if last_bid and last_bid['Bidder_Email'] == b_email:
+                flash('Bid rejected: you must wait for another bidder.', 'warning')
+                return redirect(url_for('listing', seller_email=seller_email, listing_id=listing_id))
+
+            if b_email == seller_email:
+                flash('Bid rejected: seller cannot bid on own listing.', 'warning')
+                return redirect(url_for('listing', seller_email=seller_email, listing_id=listing_id))
+
+            next_bid_id = conn.execute('SELECT COALESCE(MAX(Bid_ID), 0) + 1 FROM Bids').fetchone()[0]
+            conn.execute(
+                '''
+                INSERT INTO Bids (Bid_ID, Seller_Email, Listing_ID, Bidder_Email, Bid_Price)
+                VALUES (?, ?, ?, ?, ?)
+                ''',
+                (next_bid_id, seller_email, listing_id, b_email, bid_price)
+            )
+
+            updated_stats = conn.execute(
+                '''
+                SELECT COUNT(*) AS bid_count, MAX(Bid_Price) AS highest_bid
+                FROM Bids
+                WHERE Seller_Email = ? AND Listing_ID = ?
+                ''',
+                (seller_email, listing_id)
+            ).fetchone()
+
+            updated_bid_count = int(updated_stats['bid_count'] or 0)
+            updated_highest_bid = float(updated_stats['highest_bid'] or 0)
+
+            if updated_bid_count >= max_bids:
+                if updated_highest_bid >= reserve_price:
+                    conn.execute(
+                        '''
+                        UPDATE Auction_Listings
+                        SET Status = 2
+                        WHERE Seller_Email = ? AND Listing_ID = ?
+                        ''',
+                        (seller_email, listing_id)
+                    )
+                    conn.commit()
+
+                    winning_bid = conn.execute(
+                        '''
+                        SELECT Bidder_Email, Bid_Price
+                        FROM Bids
+                        WHERE Seller_Email = ? AND Listing_ID = ?
+                        ORDER BY Bid_Price DESC, Bid_ID DESC
+                        LIMIT 1
+                        ''',
+                        (seller_email, listing_id)
+                    ).fetchone()
+
+                    if winning_bid and winning_bid['Bidder_Email'] == b_email:
+                        flash('Bid accepted. Auction ended and you won. Please complete payment.', 'success')
+                        return redirect(url_for('auction_payment', seller_email=seller_email, listing_id=listing_id))
+
+                    flash('Bid accepted. Auction ended.', 'success')
+                    return redirect(url_for('listing', seller_email=seller_email, listing_id=listing_id))
+
+                conn.execute(
+                    '''
+                    UPDATE Auction_Listings
+                    SET Status = 0
+                    WHERE Seller_Email = ? AND Listing_ID = ?
+                    ''',
+                    (seller_email, listing_id)
+                )
+                conn.commit()
+                flash('Bid accepted. Auction ended but reserve price not met.', 'warning')
+                return redirect(url_for('listing', seller_email=seller_email, listing_id=listing_id))
+
+            conn.commit()
+            flash('Bid accepted.', 'success')
+            return redirect(url_for('listing', seller_email=seller_email, listing_id=listing_id))
+
     return render_template(
         'item_detail.html',
         listing=r,
@@ -910,7 +1013,7 @@ def listing(seller_email, listing_id):
         bid_count=bid_count,
         remaining_bids=remaining_bids,
         can_place_bid=can_place_bid,
-        is_winner=False,
+        is_winner=is_winner,
         recent_bids=rb,
         avg_rating=avg_rating,
         num_ratings=num_ratings,
@@ -922,13 +1025,14 @@ def listing(seller_email, listing_id):
 
 
 @app.route('/rate/<seller_email>/<int:listing_id>', methods=['POST'])
+@bidder_only
 def rate_seller(seller_email, listing_id):
     if session.get("user_type") != "bidder" or not session.get("email"):
         flash("Only logged-in bidders can rate.", "danger")
         return redirect(url_for("listing", seller_email=seller_email, listing_id=listing_id))
 
     bidder_email = session["email"]
-    today = date.today().isoformat()
+    today = date.today().strftime('%m/%d/%y')
     rating_val = request.form.get("rating", "").strip()
     try:
         rating_val = int(rating_val)
@@ -977,7 +1081,7 @@ def rate_seller(seller_email, listing_id):
 
 # Watchlist Functions #
 @app.route('/watchlist')
-@login_required
+@bidder_only
 def watchlist():
     from flask import get_flashed_messages
     get_flashed_messages()
@@ -1041,11 +1145,9 @@ def watchlist():
         return redirect(url_for('bidder_dashboard'))
 # route for page seller_auction.html
 @app.route('/seller_auction')
+@seller_only
 def seller_auction():
     conn = get_db_connection()
-    if not session.get("email"):
-        return redirect(url_for("login"))
-
     #
     # this part is for create auction
     # Get category selections (fetch all categories)
@@ -1072,6 +1174,7 @@ def seller_auction():
     return render_template("seller_auction.html", categories=categories,active_listings=active_listings,inactive_listings=inactive_listings,sold_listings=sold_listings)
 # route for creating an auction
 @app.route("/create_auction",methods=['POST'])
+@seller_only
 def create_auction():
     conn = get_db_connection()
     Seller_Email = session.get("email")
@@ -1129,6 +1232,7 @@ def create_auction():
 
 #for check if auction can edit or not
 @app.route('/check_edit_auction', methods=['POST'])
+@seller_only
 def check_edit_auction():
     conn = get_db_connection()
     seller_email = session.get("email")
@@ -1198,6 +1302,7 @@ def check_edit_auction():
 
 # This changes active to inactive, otherwise
 @app.route('/toggle_status', methods=['POST'])
+@seller_only
 def toggle_status():
     conn = get_db_connection()
 
@@ -1226,6 +1331,7 @@ def toggle_status():
         conn.close()
 
 @app.route('/update_auction', methods=['POST'])
+@seller_only
 def update_auction():
     conn = get_db_connection()
     seller_email = session.get("email")
@@ -1318,6 +1424,7 @@ def update_auction():
     return redirect(url_for("seller_auction", updated="1"))
 
 @app.route('/seller_profile')
+@seller_only
 def seller_profile():
     email = session.get("email")
     if not email:
@@ -1329,6 +1436,7 @@ def seller_profile():
 
 #this update password
 @app.route('/update_password', methods=['POST'])
+@login_required
 def update_profile():
     conn = get_db_connection()
 
@@ -1363,6 +1471,7 @@ def update_profile():
 
 # This update bank account information of seller
 @app.route('/update_bank_info', methods=['POST'])
+@seller_only
 def update_bank_info():
         conn = get_db_connection()
 
@@ -1408,6 +1517,7 @@ def update_bank_info():
             conn.close()
 
 @app.route('/bidder_profile')
+@bidder_only
 def bidder_profile():
     email = session.get("email")
     if not email:
@@ -1441,6 +1551,7 @@ def bidder_profile():
 
 # THis part update bidder profile
 @app.route('/update_bidder_profile', methods=['POST'])
+@bidder_only
 def update_bidder_profile():
     email = session.get("email")
     if not email:
@@ -1497,7 +1608,7 @@ def update_bidder_profile():
         conn.close()
 
 @app.route('/add_watchlist', methods=['POST'])
-@login_required
+@bidder_only
 def add_watchlist():
     user_email = session.get('user_id')
     seller_email = request.form.get('seller_email')
@@ -1524,7 +1635,7 @@ def add_watchlist():
         return redirect(url_for('bidder_dashboard'))
 
 @app.route('/remove_watchlist', methods=['POST'])
-@login_required
+@bidder_only
 def remove_watchlist():
     user_email = session.get('user_id')
     seller_email = request.form.get('seller_email')
@@ -1549,7 +1660,7 @@ def remove_watchlist():
     
 # Place Bid within the Watchlist
 @app.route('/place_bid', methods=['POST'])
-@login_required
+@bidder_only
 def place_bid():
     if session.get('user_type') not in ['bidder']:
         flash('Only bidders can place bids.', 'danger')
@@ -1694,11 +1805,8 @@ def submit_request():
         return redirect(url_for('submit_request'))
     
 @app.route('/helpdesk/approve_category/<int:request_id>', methods=['POST'])
-@login_required
+@helpdesk_only
 def helpdesk_approve_category(request_id):
-    if session.get('user_type') != 'helpdesk':
-        return redirect(url_for('login'))
-
     try:
         with get_db_connection() as conn:
             req = conn.execute('SELECT * FROM Requests WHERE request_id = ?', (request_id,)).fetchone()
@@ -1740,6 +1848,59 @@ def helpdesk_approve_category(request_id):
         flash(f'Error approving category: {str(e)}', 'danger')
         import traceback
         traceback.print_exc()
+    
+    return redirect(url_for('helpdesk_dashboard'))
+
+@app.route('/helpdesk/complete/<int:request_id>', methods=['POST'])
+@helpdesk_only
+def helpdesk_complete(request_id):
+    if session.get('user_type') != 'helpdesk':
+        return redirect(url_for('login'))
+
+    try:
+        with get_db_connection() as conn:
+            conn.execute('UPDATE Requests SET request_status = 2, helpdesk_staff_email = ? WHERE request_id = ?', 
+                         (session.get('email'), request_id))
+            conn.commit()
+            flash('Request marked as completed.', 'success')
+    except Exception as e:
+        flash(f'Error completing request: {str(e)}', 'danger')
+    
+    return redirect(url_for('helpdesk_dashboard'))
+
+
+@app.route('/helpdesk/reject/<int:request_id>', methods=['POST'])
+@helpdesk_only
+def helpdesk_reject(request_id):
+    if session.get('user_type') != 'helpdesk':
+        return redirect(url_for('login'))
+
+    try:
+        with get_db_connection() as conn:
+            conn.execute('UPDATE Requests SET request_status = 1, helpdesk_staff_email = ? WHERE request_id = ?', 
+                         (session.get('email'), request_id))
+            conn.commit()
+            flash('Request marked as rejected.', 'success')
+    except Exception as e:
+        flash(f'Error rejecting request: {str(e)}', 'danger')
+    
+    return redirect(url_for('helpdesk_dashboard'))
+
+
+@app.route('/helpdesk/claim/<int:request_id>', methods=['POST'])
+@helpdesk_only
+def helpdesk_claim(request_id):
+    if session.get('user_type') != 'helpdesk':
+        return redirect(url_for('login'))
+
+    try:
+        with get_db_connection() as conn:
+            conn.execute('UPDATE Requests SET helpdesk_staff_email = ? WHERE request_id = ?', 
+                         (session.get('email'), request_id))
+            conn.commit()
+            flash('Request claimed successfully.', 'success')
+    except Exception as e:
+        flash(f'Error claiming request: {str(e)}', 'danger')
     
     return redirect(url_for('helpdesk_dashboard'))
 
