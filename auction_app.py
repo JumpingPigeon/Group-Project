@@ -584,7 +584,7 @@ def search():
             if conditions:
                 base_query += " AND " + " AND ".join(conditions)
             
-            base_query += " ORDER BY al.Listing_ID DESC"
+            base_query += "ORDER BY al.is_promoted DESC, al.Listing_ID DESC"
             
             items = conn.execute(base_query, params).fetchall()
 
@@ -770,9 +770,10 @@ def category_detail(name):
         ).fetchall()
         l = conn.execute(
             '''
-            SELECT Seller_Email, Listing_ID, Auction_Title, Product_Name, Reserve_Price, Status
+            SELECT Seller_Email, Listing_ID, Auction_Title, Product_Name, Reserve_Price, Status, is_promoted
             FROM Auction_Listings
             WHERE Category = ? AND Status = 1
+            ORDER BY is_promoted DESC, Listing_ID DESC
             ''',
             (name,)
         ).fetchall()
@@ -1157,7 +1158,7 @@ def seller_auction():
     """).fetchall()
 
     active_listings = conn.execute("""
-    SELECT * FROM Auction_Listings
+    SELECT *, (0.05 * CAST(REPLACE(Reserve_Price, '$', '') AS REAL)) AS promotion_cost FROM Auction_Listings
     WHERE Seller_Email = ? AND Status = 1
 """, (email,)).fetchall()
 
@@ -1945,6 +1946,59 @@ def helpdesk_claim(request_id):
         flash(f'Error claiming request: {str(e)}', 'danger')
     
     return redirect(url_for('helpdesk_dashboard'))
+
+@app.route('/seller/promote/<seller_email>/<int:listing_id>', methods=['POST'])
+@seller_only
+def promote_auction(seller_email, listing_id):
+    current_seller_email = session.get('email')
+    if current_seller_email != seller_email:
+        flash('Access denied. You can only promote your own listings.', 'danger')
+        return redirect(url_for('seller_auction'))
+
+    try:
+        with get_db_connection() as conn:
+            listing = conn.execute(
+                'SELECT Listing_ID, Reserve_Price, Status, Category, is_promoted FROM Auction_Listings WHERE Seller_Email = ? AND Listing_ID = ?',
+                (seller_email, listing_id)
+            ).fetchone()
+
+            if not listing:
+                flash('Auction listing not found.', 'danger')
+                return redirect(url_for('seller_auction'))
+
+            is_promoted_value = listing['is_promoted']
+            if is_promoted_value is not None and int(is_promoted_value) == 1:
+                flash('This auction is already promoted.', 'info')
+                return redirect(url_for('seller_auction'))
+
+            status_value = listing['Status']
+            if status_value is None or int(status_value) != 1:
+                flash('Cannot promote an auction that is not active.', 'danger')
+                return redirect(url_for('seller_auction'))
+
+            reserve_price_str = listing['Reserve_Price']
+            if reserve_price_str is None:
+                flash('Reserve price is not set for this listing.', 'danger')
+                return redirect(url_for('seller_auction'))
+
+            reserve_price = parse_money(reserve_price_str)
+            promotion_fee = reserve_price * 0.05
+            promotion_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            conn.execute(
+                '''UPDATE Auction_Listings 
+                   SET is_promoted = 1, promotion_fee = ?, promotion_date = ? 
+                   WHERE Seller_Email = ? AND Listing_ID = ?''',
+                (promotion_fee, promotion_timestamp, seller_email, listing_id)
+            )
+            conn.commit()
+            flash(f'Auction promoted successfully for ${promotion_fee:.2f}!', 'success')
+
+    except Exception as e:
+        flash(f'Unexpected error promoting auction: {str(e)}', 'danger')
+        import traceback
+        traceback.print_exc()
+
+    return redirect(url_for('seller_auction'))
 
 if __name__ == '__main__':
     #app.run()

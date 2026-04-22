@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Manage Auctions - Nittany Auction</title>
+    <title>Manage Auctions - Lion Auction</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
     <style>
         body {
@@ -76,7 +76,7 @@
 <body>
 
 <nav class="navbar navbar-light">
-    <a class="navbar-brand" href="/">Nittany Auction</a>
+    <a class="navbar-brand" href="/">Lion Auction</a>
     <div class="ml-auto">
         {% if session.get('user_id') %}
             <span class="mr-3 text-muted">Welcome, {{ session.get('first_name') }}</span>
@@ -164,8 +164,10 @@
                 {% for a in active_listings %}
                 <div class="listing-item d-flex justify-content-between align-items-center">
                     <div>
-                        <strong>{{ a.Auction_Title }}</strong> (ID: {{ a.Listing_ID }})<br>
-                        <small class="text-muted">{{ a.Product_Name }} | Reserve: ${{ a.Reserve_Price }}</small>
+                        <strong>{{ a.Auction_Title }}</strong> (ID: {{ a.Listing_ID }}) 
+                        {% if a.is_promoted == 1 %}<span class="badge badge-warning ml-2">Promoted</span>{% endif %}
+                        <br>
+                        <small class="text-muted">{{ a.Product_Name }} | Reserve: {{ a.Reserve_Price }}</small>
                     </div>
                     <div>
                         <button class="btn btn-outline-primary btn-sm mr-2" onclick="checkEditAuction('{{ a.Listing_ID }}')">Edit</button>
@@ -174,6 +176,13 @@
                             <input type="hidden" name="status" value="0">
                             <button type="submit" class="btn btn-outline-secondary btn-sm">Deactivate</button>
                         </form>
+                        {% if a.is_promoted != 1 %}
+                        <form method="POST" action="{{ url_for('promote_auction', seller_email=session['email'], listing_id=a.Listing_ID) }}" style="display:inline;">
+                            <button type="submit" class="btn btn-warning btn-sm ml-2">
+                                Promote (${{ "%.2f"|format(a.promotion_cost) }})
+                            </button>
+                        </form>
+                        {% endif %}
                     </div>
                 </div>
                 {% else %}

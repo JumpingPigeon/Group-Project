@@ -15,8 +15,6 @@ Transactions: transaction_id, seller_email, listing_id, bidder_email, date, paym
 Users: email, password
 Zipcode_Info: zipcode, city, state
 
-git restore nittany_auction.db
-
 Primary Keys
 Address: address ID
 Auction_Listings: Seller Email, Listing ID

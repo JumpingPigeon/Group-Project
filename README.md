@@ -16,8 +16,10 @@ This is a comprehensive online auction platform built with Flask, featuring thre
     2. Helpdesk - Xuan
     3. Seller - Sirui
     4. Bidder - Jinyang
+
 3. Category Hierarchy - Xuan
     - View all categories and subcategories
+
 4. Auction Listing Management (Seller) - Sirui
     - Create a new auction listing
     - Edit an existing auction listing
@@ -25,14 +27,23 @@ This is a comprehensive online auction platform built with Flask, featuring thre
 5. AuctionBidding (Bidder) - Jinyang
     -
 6. UserRegistration - Jinyang
+    - Allow user to select their role and register
+    - helpdesk require system admin to internally register user
+
 7. UserProfileUpdate - Sirui
+    - Allow user to update their profile
+    - Change ID will be in form of helprequest
 8. Product Search - Hao
+    - Allow user to search for products by category, name, or description
+    - Allow user to set price range
 
 9. Extra Credit 1 - Helpdesk Support - Hao
     - Allow helpdesk to claim request, view and manage their requests, and mark as complete once completed.
     - For Demo Purpose, we only implment Adding a new catrgory fucntion
+
 10. Extra Credit 2 - AuctionPromotion (Seller) - Hao
     - Allow seller to create a promotion for their auction
+
 11. Extra Credit 3 - Wishlist - Hao
     - Allow bidder to add an item to their wishlist
     - Able to place bid in the wishlist
@@ -49,6 +60,8 @@ This is a comprehensive online auction platform built with Flask, featuring thre
 ## Reference
 - [Flask Documentation](https://flask.palletsprojects.com/en/stable/#user-s-guide)
 - [Bootstrap Documentation](https://getbootstrap.com/docs/5.3/getting-started/introduction/)
+- [Bootstrap Documentation](https://www.runoob.com/bootstrap/bootstrap-tutorial.html)
+- [Bootstrap Documentation](https://www.w3schools.com/bootstrap/)
 - [SQLite Documentation] (https://www.sqlitetutorial.net/)
 - [HTML Tutorial] (https://www.w3schools.com/html/)
 - [CSS Tutorial] (https://www.w3schools.com/css/)
