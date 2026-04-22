@@ -1,1 +1,54 @@
 如果页面这有登录的人才能开，记得在@app.route下面加@login_required。
+
+Address: address_id, zipcode, street_number, street_name
+Auction_Listings: seller_email, listing_id, category, auction_title, product_name, product_description, quantity, reserve_price, max_bids, status
+Bidders: email, firstname, lastname, age, home_address_id, major
+Bids: bid_id, seller_email, listing_id, bidder_email, bid_price
+Categories: parent_category, category_name
+Credit_Cards: credit_card_num, card_type, expire_month, expire_year, security_code, owner_email
+Helpdesk: email, position
+Local_Vendors: email, business_name, business_address_id, customer_service_phone_number
+Ratings: bidder_email, seller_email, date, rating, rating_desc
+Requests: request_id, sender_email, helpdesk_staff_email, request_type, request_desc, request_status
+Sellers: email, bank_routing_number, bank_account_number, balance
+Transactions: transaction_id, seller_email, listing_id, bidder_email, date, payment
+Users: email, password
+Zipcode_Info: zipcode, city, state
+
+git restore nittany_auction.db
+
+Primary Keys
+Address: address ID
+Auction_Listings: Seller Email, Listing ID
+Bidders: email
+Bids: Bid ID
+Categories: category name
+Credit_Cards: credit card num
+Helpdesk: email
+Local_Vendors: Email
+Rating: Bidder Email, Seller Email, Date
+Requests: request id
+Sellers: email
+Transactions: Transaction ID
+Users: email
+Zipcode_Info: zipcode
+
+Foreign Keys
+Auction_Listings: Seller Email 引用 Sellers(email)
+Auction_Listings: Category 引用 Categories(category name)
+Bidders: email 引用 Users(email)
+Bidders: home_address_id 引用 Address(address ID)
+Bids: (Seller_Email, Listing_ID) 复合引用 Auction_Listings(Seller Email, Listing ID)
+Bids: Bidder_email 引用 Bidders(email)
+Categories: parent_category 引用 Categories(category name)
+Credit_Cards: Owner_email 引用 Bidders(email)
+Helpdesk: email 引用 Users(email)
+Local_Vendors: Email 引用 Sellers(email)
+Local_Vendors: Business_Address_ID 引用 Address(address ID)
+Rating: Bidder Email 引用 Bidders(email)
+Rating: Seller Email 引用 Sellers(email)
+Requests: sender_email 引用 Users(email)
+Requests: helpdesk_staff_email 引用 Helpdesk(email)
+Sellers: email 引用 Users(email)
+Transactions: (Seller_Email, Listing_ID) 复合引用 Auction_Listings(Seller Email, Listing ID)
+Transactions: Buyer_Email 引用 Bidders(email)
