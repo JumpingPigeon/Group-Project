@@ -1433,7 +1433,49 @@ def seller_profile():
     conn = get_db_connection()
 
     return render_template("seller_profile.html",email=email,)
-
+@app.route('/seller/sales')
+@seller_only
+def seller_sales():
+    seller_email = session.get('email')
+    
+    try:
+        with get_db_connection() as conn:
+            sales = conn.execute('''
+                SELECT 
+                    t.Transaction_ID,
+                    t.Seller_Email,
+                    t.Listing_ID,
+                    t.Bidder_Email,
+                    t.Date,
+                    t.Payment,
+                    al.Auction_Title,
+                    al.Product_Name,
+                    COALESCE(b.first_name || ' ' || b.last_name, 'Unknown Bidder') as Bidder_Name,
+                    al.Reserve_Price,
+                    r.Rating,
+                    r.Rating_Desc
+                FROM Transactions t
+                JOIN Auction_Listings al ON t.Seller_Email = al.Seller_Email AND t.Listing_ID = al.Listing_ID
+                LEFT JOIN Bidders b ON t.Bidder_Email = b.email
+                LEFT JOIN Ratings r ON t.Bidder_Email = r.Bidder_Email 
+                                    AND t.Seller_Email = r.Seller_Email 
+                                    AND t.Date = r.Date
+                WHERE t.Seller_Email = ? AND al.Status = 2
+                ORDER BY t.Date DESC
+            ''', (seller_email,)).fetchall()
+            
+            sales_list = []
+            for sale in sales:
+                sale_dict = dict(sale)
+                sale_dict['Payment'] = float(sale_dict['Payment']) if sale_dict['Payment'] else 0.0
+                sale_dict['Reserve_Price'] = parse_money(sale_dict['Reserve_Price'])
+                sales_list.append(sale_dict)
+                
+        return render_template('seller_sales.html', sales=sales_list)
+    except Exception as e:
+        flash(f'Error loading sales history: {str(e)}', 'danger')
+        return redirect(url_for('seller_dashboard'))
+    
 #this update password
 @app.route('/update_password', methods=['POST'])
 @login_required

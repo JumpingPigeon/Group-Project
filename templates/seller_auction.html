@@ -1,451 +1,363 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
-      <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@200..700&family=Rubik:ital,wght@0,300..900;1,300..900&display=swap" rel="stylesheet">
-        <style>
-            .option{
-                font-size: 14px;
-                margin-left: 0px;
-                font-family:"Rubik", sans-serif;
-                width:140px;
-                text-align: center;
-                height:50px;
-                display:flex;
-                justify-content:center;
-                border-left:1px solid white;
-                border-right:1px solid white;
-              
-            }
-            .option:hover{
-              background-color:#0D6EFD;
-              transition:1s;
-              transform: scale(1.2);
-            }
-            body{
-                font-family: Arial, Helvetica, sans-serif;
-                margin: 0;
-                background: #f6f7fb;
-            }
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Manage Auctions - Nittany Auction</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .navbar {
+            background-color: #fff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            padding: 15px 30px;
+        }
+        .navbar-brand {
+            font-weight: 700;
+            color: #001e44 !important;
+            font-size: 1.5rem;
+        }
+        .container {
+            margin-top: 30px;
+            max-width: 1000px;
+            flex-grow: 1;
+        }
+        .card-custom {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            border-top: 4px solid #001e44;
+        }
+        .section-title {
+            color: #001e44;
+            font-weight: 700;
+            margin-bottom: 20px;
+        }
+        .btn-custom {
+            border-radius: 30px;
+            padding: 8px 20px;
+            font-weight: 600;
+            background-color: #001e44;
+            border: none;
+            color: white;
+        }
+        .btn-custom:hover {
+            background-color: #002a5e;
+            color: white;
+        }
+        .listing-item {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            transition: all 0.2s;
+        }
+        .listing-item:hover {
+            border-color: #001e44;
+            background-color: #fcfdff;
+        }
+        .nav-tabs .nav-link {
+            color: #6b7280;
+        }
+        .nav-tabs .nav-link.active {
+            color: #001e44;
+            font-weight: 700;
+            border-top: 3px solid #001e44;
+        }
+    </style>
+</head>
+<body>
 
-            #header{
-                background-color: #111827;
-                height: 50px;
-                
-            }
-            a{
-                text-decoration: none;
-            }
+<nav class="navbar navbar-light">
+    <a class="navbar-brand" href="/">Nittany Auction</a>
+    <div class="ml-auto">
+        {% if session.get('user_id') %}
+            <span class="mr-3 text-muted">Welcome, {{ session.get('first_name') }}</span>
+            <a class="btn btn-outline-primary btn-sm px-3 mr-2" href="{{ url_for('seller_dashboard') }}">Dashboard</a>
+            <button type="button" class="btn btn-outline-danger btn-sm" data-toggle="modal" data-target="#logoutModal">Logout</button>
+        {% endif %}
+    </div>
+</nav>
 
-            #header a {
-                color: white;
-                display: block;
-            }
+<div class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+            </div>
+        {% endfor %}
+    {% endwith %}
 
+    <!-- Create Auction Section -->
+    <div class="card-custom">
+        <h3 class="section-title">➕ Create New Auction</h3>
+        <form method="POST" action="/create_auction">
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label>Auction Title</label>
+                    <input type="text" class="form-control" name="title" required>
+                </div>
+                <div class="form-group col-md-6">
+                    <label>Product Name</label>
+                    <input type="text" class="form-control" name="name" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label>Category</label>
+                    <select class="form-control" name="category">
+                        {% for c in categories %}
+                        <option value="{{ c['category_name'] }}">{{ c['category_name'] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group col-md-6">
+                    <label>Quantity</label>
+                    <input type="number" class="form-control" name="quantity" min="1" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea class="form-control" name="description" rows="3" required></textarea>
+            </div>
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label>Reserve Price ($)</label>
+                    <input type="number" class="form-control" name="r_price" step="0.01" min="0" required>
+                </div>
+                <div class="form-group col-md-6">
+                    <label>Maximum Bids</label>
+                    <input type="number" class="form-control" name="max_bid" min="1" required>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-custom mt-2">Publish Auction</button>
+        </form>
+    </div>
 
-            #main-page{
-                margin-left: 90px;
-                margin-top: 50px;
-                
-            }
-            .container { 
-                max-width: 900px; 
-                margin: 24px auto; 
-                padding: 0 16px; }
-            .card{
-                background: white; 
-                border-radius: 12px; 
-                padding: 18px; 
-                box-shadow: 0 2px 10px rgba(0,0,0,.06); 
-            }
-            
-        </style>
-    </head>
-    <body>
-        <div id="header" class="fixed-top w-100 text-white align-items-center d-flex" style="padding: 14px 20px;">
-            <div class="px-3" style="font-size: 18px;font-family:Oswald, sans-serif;">Nittany Auction - Seller</div>
-            <div class="option " style="margin-left:150px;"><a  style="margin:auto;" href="/seller_profile">Profile</a></div>
-            <div class="option" style="margin-right:150px;"><a style="margin:auto;" href="/seller_auction">My auction</a></div>
-            <div class="" style="margin-left:auto;">
-                    <button style="Rubik, sans-serif; height: 30px;font-size: 13px;" type="submit" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#login_confirm">
-                        Logout
-                    </button>
-                
+    <!-- Manage Auctions Section -->
+    <div class="card-custom">
+        <h3 class="section-title">📦 Manage My Listings</h3>
+        
+        <ul class="nav nav-tabs mb-3" id="auctionTabs">
+            <li class="nav-item">
+                <button class="nav-link active" data-toggle="tab" data-target="#active">Active</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-toggle="tab" data-target="#inactive">Inactive</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-toggle="tab" data-target="#sold">Sold</button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            <!-- Active Listings -->
+            <div class="tab-pane fade show active" id="active">
+                {% for a in active_listings %}
+                <div class="listing-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>{{ a.Auction_Title }}</strong> (ID: {{ a.Listing_ID }})<br>
+                        <small class="text-muted">{{ a.Product_Name }} | Reserve: ${{ a.Reserve_Price }}</small>
+                    </div>
+                    <div>
+                        <button class="btn btn-outline-primary btn-sm mr-2" onclick="checkEditAuction('{{ a.Listing_ID }}')">Edit</button>
+                        <form method="POST" action="/toggle_status" style="display:inline;">
+                            <input type="hidden" name="listing_id" value="{{ a.Listing_ID }}">
+                            <input type="hidden" name="status" value="0">
+                            <button type="submit" class="btn btn-outline-secondary btn-sm">Deactivate</button>
+                        </form>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-muted">No active listings.</p>
+                {% endfor %}
+            </div>
+
+            <!-- Inactive Listings -->
+            <div class="tab-pane fade" id="inactive">
+                {% for a in inactive_listings %}
+                <div class="listing-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>{{ a.Auction_Title }}</strong> (ID: {{ a.Listing_ID }})<br>
+                        <small class="text-muted">{{ a.Product_Name }}</small>
+                    </div>
+                    <div>
+                        <button class="btn btn-outline-primary btn-sm mr-2" onclick="checkEditAuction('{{ a.Listing_ID }}')">Edit</button>
+                        <form method="POST" action="/toggle_status" style="display:inline;">
+                            <input type="hidden" name="listing_id" value="{{ a.Listing_ID }}">
+                            <input type="hidden" name="status" value="1">
+                            <button type="submit" class="btn btn-success btn-sm">Activate</button>
+                        </form>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-muted">No inactive listings.</p>
+                {% endfor %}
+            </div>
+
+            <!-- Sold Listings -->
+            <div class="tab-pane fade" id="sold">
+                {% for a in sold_listings %}
+                <div class="listing-item">
+                    <strong>{{ a.Auction_Title }}</strong> (ID: {{ a.Listing_ID }})<br>
+                    <small class="text-muted">{{ a.Product_Name }}</small>
+                    <span class="badge badge-success ml-2">Sold</span>
+                </div>
+                {% else %}
+                <p class="text-muted">No sold listings yet.</p>
+                {% endfor %}
             </div>
         </div>
+    </div>
+</div>
 
-        
-        <div class="container">
-            <div class="d-flex card  " style="margin-top:100px;">
-                <div class="accordion" id="productAccordion">
-
-                    <div class="accordion-item">
-                        <h2 class="accordion-header">
-                        <button class="accordion-button" data-bs-toggle="collapse" data-bs-target="#create">
-                            Create an Auction
-                        </button>
-                        </h2>
-                        <div id="create" class="accordion-collapse collapse">
-                        <div class="accordion-body">
-
-                           <!-- form for creating an auction -->
-                            <form method="POST" action="/create_auction">
-
-                                
-                                <div class="row g-2 flex-column">
-
-
-                                    <!-- Titile of the auction -->
-                                    <div class="col-md">
-                                        <div class="form-floating">
-                                        <input type="text" class="form-control" id="floatingInputGrid" name = "title" required>
-                                        <label for="floatingInputGrid">Title of the auction</label>
-                                        </div>
-                                    </div>
-
-                                    <!-- Name of the product -->
-                                    <div class="col-md">
-                                        <div class="form-floating">
-                                        <input type="text" class="form-control" id="floatingInputGrid" name = "name" required>
-                                        <label for="floatingInputGrid">Name of the Product</label>
-                                        </div>
-                                    </div>
-
-                                    <!-- Category of the product -->
-                                    <div class="col-md">
-                                        <div class="form-floating">
-                                        <select class="form-select" id="floatingSelectGrid" name = "category">
-                                            {% for c in categories %}
-                                            <option value="{{ c['category_name'] }}">{{ c['category_name'] }}</option>
-                                            {% endfor %}
-                                        </select>
-                                        <label for="floatingSelectGrid">Category</label>
-                                        </div>
-                                    </div>
-
-                                    <!-- description of the product -->
-                                    <div class="col-md">
-                                        <div class="form-floating">
-                                        
-                                            <textarea class="form-control" style="height:120px;" id="floatingInputGrid"  name = "description" required></textarea>
-                                        
-                                            <label for="floatingInputGrid">Description of the Product</label>
-                                            
-                                        </div>
-                                    </div>
-
-                                    <!-- quantity of the product -->
-                                    <div class="col-md">
-                                        <div class="form-floating">
-                                        <input type="number" class="form-control" min = "1" id="floatingInputGrid" name = "quantity" required>
-                                        <label for="floatingInputGrid">Quantity of the Product</label>
-                                        </div>
-                                    </div> 
-
-                                    <!-- reserve Price of the product -->
-                                    <div class="col-md">
-                                        <div class="form-floating">
-                                        <input type="number" class="form-control" min="1" id="floatingInputGrid" name = "r_price" required>
-                                        <label for="floatingInputGrid">Reserve Price of the Product (dollars)</label>
-                                        </div>
-                                    </div>
-
-                                    <!-- max bid of the product -->
-                                    <div class="col-md">
-                                        <div class="form-floating">
-                                        <input type="number" class="form-control" min="1" id="floatingInputGrid" name = "max_bid" required>
-                                        <label for="floatingInputGrid">maximum numbers of bid</label>
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <button type="submit" class="btn btn-success">Publish</button>
-                                    </div>
-                                </div>
-
-                            </form>
-                        </div>
-                        </div>
-                    </div>
-
-
-
-                    <div class="accordion-item">
-                        <h2 class="accordion-header">
-                        <button class="accordion-button" data-bs-toggle="collapse" data-bs-target="#delete">
-                            Manage Active Auctions
-                        </button>
-                        </h2>
-                        <div id="delete" class="accordion-collapse collapse">
-                        <div class="accordion-body">
-                            <div class="accordion-body">
-
-                            <!-- Tabs -->
-                            <ul class="nav nav-tabs" id="auctionTabs">
-                                <li class="nav-item">
-                                    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#active">Active</button>
-                                </li>
-                                <li class="nav-item">
-                                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#inactive">Inactive</button>
-                                </li>
-                                <li class="nav-item">
-                                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#sold">Sold</button>
-                                </li>
-                            </ul>
-
-                            <!-- Tab Content -->
-                            <div class="tab-content mt-3">
-
-                                <!-- Active -->
-                                <div class="tab-pane fade show active" id="active">
-                                    {% for a in active_listings %}
-                                        <div class="card mb-2 p-2">
-                                            <b>{{ a.Auction_Title }}</b><br>
-                                            {{a.Listing_ID}}<br>
-                                            {{ a.Product_Name }}<br>
-                                            Quantity: {{ a.Quantity }}<br>
-                                            Price: {{ a.Reserve_Price }}
-                                            <br>
-                                            <button
-                                                type="button"
-                                                class="btn btn-primary"
-                                                style="width: 200px;"
-                                                onclick="checkEditAuction('{{ a.Listing_ID }}')">
-                                                Edit
-                                            </button>
-                                            <br>
-                                            <!-- set inactive -->
-                                                <form method="POST" action="/toggle_status" style="display:inline;">
-                                                    <input type="hidden" name="listing_id" value="{{ a.Listing_ID }}">
-                                                    <input type="hidden" name="status" value="0">
-                                                    <button type="submit" class="btn btn-primary" style="width: 200px;">
-                                                        Set Inactive
-                                                    </button>
-                                                </form>
-                                        </div>
-                                    {% else %}
-                                        <p>No active listings.</p>
-                                    {% endfor %}
-                                </div>
-
-                                <!-- Inactive -->
-                                <div class="tab-pane fade" id="inactive">
-                                    {% for a in inactive_listings %}
-                                        <div class="card mb-2 p-2">
-                                            <b>{{ a.Auction_Title }}</b><br>
-                                            Listing ID: {{a.Listing_ID}}<br>
-                                            {{ a.Product_Name }}
-                                            <br>
-                                            <button
-                                                type="button"
-                                                class="btn btn-primary"
-                                                style="width: 200px;"
-                                                onclick="checkEditAuction('{{ a.Listing_ID }}')">
-                                                Edit
-                                            </button>
-                                            <br>
-
-                                                <!-- Set Active -->
-                                                <form method="POST" action="/toggle_status" style="display:inline;">
-                                                    <input type="hidden" name="listing_id" value="{{ a.Listing_ID }}">
-                                                    <input type="hidden" name="status" value="1">
-                                                    <button type="submit" class="btn btn-primary " style="width: 200px;">
-                                                        Set Active
-                                                    </button>
-                                                </form>
-                                        </div>
-                                    {% else %}
-                                        <p>No inactive listings.</p>
-                                    {% endfor %}
-                                </div>
-
-                                <!-- Sold -->
-                                <div class="tab-pane fade" id="sold">
-                                    {% for a in sold_listings %}
-                                        <div class="card mb-2 p-2">
-                                            <b>{{ a.Auction_Title }}</b><br>
-                                            Listing ID: {{a.Listing_ID}}<br>
-                                            {{ a.Product_Name }}
-                                            
-                                        </div>
-                                    {% else %}
-                                        <p>No sold listings.</p>
-                                    {% endfor %}
-                                </div>
-
-                            </div>
-
-                        </div>
-                        </div>
-                        </div>
-                    </div>
-
-
-                </div>
-                
-                
-            
-                    </div>
-                </div>
-                <div class="modal" tabindex="-1" id="login_confirm">
-        <div class="modal-dialog">
+<!-- Modals (Logout, Success, Edit, Blocked) remain largely the same but updated for Bootstrap 4 classes -->
+<div class="modal fade" id="logoutModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
         <div class="modal-content">
-        <div class="modal-header">
-        <h5 class="modal-title">Logout</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-        <p>Are you sure you want to logout?</p>
-        </div>
-        <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">No</button>
-        <a href="/logout" class="btn btn-primary">Yes</a>
-        
-        </div>
-        </div>
-        </div>
-        </div>
-        <!-- modal for successfully create an auction -->
-        <div class="modal fade" id="createSuccessModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Auction Created</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <h5 class="modal-title">Confirm Logout</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span>&times;</span></button>
             </div>
-            <div class="modal-body">
-                Your auction has been created successfully.
-            </div>
+            <div class="modal-body">Are you sure you want to log out?</div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">OK</button>
-            </div>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <a href="/logout" class="btn btn-danger">Logout</a>
             </div>
         </div>
-        </div>
+    </div>
+</div>
 
-        <!-- cannot edit with reasons -->
-         <div class="modal fade" id="editBlockedModal" tabindex="-1" aria-hidden="true">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
+<!-- Success Modal -->
+<div class="modal fade" id="createSuccessModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Success</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">Your auction has been created successfully.</div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-custom" data-dismiss="modal">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Blocked Modal -->
+<div class="modal fade" id="editBlockedModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Not Allowed</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span>&times;</span></button>
+            </div>
+            <div class="modal-body" id="editBlockedReason">You cannot edit this listing.</div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Auction Modal -->
+<div class="modal fade" id="editAuctionModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <form method="POST" action="/update_auction">
                 <div class="modal-header">
-                    <h5 class="modal-title">Edit Not Allowed</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body" id="editBlockedReason">
-                    You cannot edit this listing.
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">OK</button>
-                </div>
-                </div>
-            </div>
-            </div>
-
-        <!-- EDIT with input -->
-        <div class="modal fade" id="editAuctionModal" tabindex="-1" aria-hidden="true">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                <form method="POST" action="/update_auction">
-                    <div class="modal-header">
                     <h5 class="modal-title">Edit Auction</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-
-                    <div class="modal-body">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span>&times;</span></button>
+                </div>
+                <div class="modal-body">
                     <input type="hidden" id="edit_listing_id" name="listing_id">
-
-                    <div class="mb-3">
-                        <label class="form-label">Title</label>
+                    <div class="form-group">
+                        <label>Title</label>
                         <input type="text" class="form-control" id="edit_title" name="title" required>
                     </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Product Name</label>
+                    <div class="form-group">
+                        <label>Product Name</label>
                         <input type="text" class="form-control" id="edit_name" name="name" required>
                     </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Category</label>
-                        <select class="form-select" id="edit_category" name="category" required>
-                        {% for c in categories %}
-                            <option value="{{ c['category_name'] }}">{{ c['category_name'] }}</option>
-                        {% endfor %}
+                    <div class="form-group">
+                        <label>Category</label>
+                        <select class="form-control" id="edit_category" name="category" required>
+                            {% for c in categories %}
+                                <option value="{{ c['category_name'] }}">{{ c['category_name'] }}</option>
+                            {% endfor %}
                         </select>
                     </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Description</label>
-                        <textarea class="form-control" id="edit_description" name="description" rows="4" required></textarea>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea class="form-control" id="edit_description" name="description" rows="3" required></textarea>
                     </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Quantity</label>
-                        <input type="number" class="form-control" id="edit_quantity" name="quantity" min="1" required>
+                    <div class="form-row">
+                        <div class="form-group col-md-4">
+                            <label>Quantity</label>
+                            <input type="number" class="form-control" id="edit_quantity" name="quantity" min="1" required>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label>Reserve Price</label>
+                            <input type="number" class="form-control" id="edit_r_price" name="r_price" step="0.01" min="0" required>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label>Max Bids</label>
+                            <input type="number" class="form-control" id="edit_max_bid" name="max_bid" min="1" required>
+                        </div>
                     </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Reserve Price</label>
-                        <input type="number" class="form-control" id="edit_r_price" name="r_price" min="1" required>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Maximum Number of Bids</label>
-                        <input type="number" class="form-control" id="edit_max_bid" name="max_bid" min="1" required>
-                    </div>
-                    </div>
-
-                    <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success">Submit</button>
-                    </div>
-                </form>
                 </div>
-            </div>
-            </div>    
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-custom">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
-        {% if request.args.get('created') == '1' %}
-        <script>
-        window.addEventListener('load', function () {
-            const successModal = new bootstrap.Modal(document.getElementById('createSuccessModal'));
-            successModal.show();
-        });
+<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
+
+{% if request.args.get('created') == '1' %}
+<script>
+    $(document).ready(function(){
+        $('#createSuccessModal').modal('show');
         if (window.history.replaceState) {
-        window.history.replaceState({}, document.title, window.location.pathname);
-    }
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    });
+</script>
+{% endif %}
 
-        </script>
-        {% endif %}
+<script>
+    async function checkEditAuction(listingId) {
+        const formData = new FormData();
+        formData.append("listing_id", listingId);
 
-        <!-- script for edit -->
-    <script>
-        async function checkEditAuction(listingId) {
-            const formData = new FormData();
-            formData.append("listing_id", listingId);
-
+        try {
             const response = await fetch("/check_edit_auction", {
                 method: "POST",
                 body: formData
             });
 
-            console.log("status:", response.status);
-
-            const text = await response.text();
-            console.log("raw response:", text);
-
-            const result = JSON.parse(text);
+            const result = await response.json();
             
             if (!result.ok) {
                 document.getElementById("editBlockedReason").textContent = result.reason;
-                const blockedModal = new bootstrap.Modal(document.getElementById("editBlockedModal"));
-                blockedModal.show();
+                $('#editBlockedModal').modal('show');
                 return;
             }
 
             const listing = result.listing;
-
             document.getElementById("edit_listing_id").value = listing.listing_id;
             document.getElementById("edit_title").value = listing.title;
             document.getElementById("edit_name").value = listing.name;
@@ -455,10 +367,11 @@
             document.getElementById("edit_r_price").value = parseFloat(listing.reserve_price.replace("$", ""));
             document.getElementById("edit_max_bid").value = listing.max_bids;
 
-            const editModal = new bootstrap.Modal(document.getElementById("editAuctionModal"));
-            editModal.show();
+            $('#editAuctionModal').modal('show');
+        } catch (error) {
+            console.error("Error:", error);
         }
-        </script>     
-    </body>
-
+    }
+</script>     
+</body>
 </html>

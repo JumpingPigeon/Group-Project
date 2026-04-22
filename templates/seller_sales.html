@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sales History - Nittany Auction</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .navbar {
+            background-color: #fff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            padding: 15px 30px;
+        }
+        .navbar-brand {
+            font-weight: 700;
+            color: #001e44 !important;
+            font-size: 1.5rem;
+        }
+        .container {
+            margin-top: 30px;
+            max-width: 1200px;
+            flex-grow: 1;
+        }
+        .header-section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            margin-bottom: 30px;
+        }
+        .page-title {
+            color: #001e44;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        .table-container {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .btn-custom {
+            border-radius: 30px;
+            padding: 10px 25px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-light">
+    <a class="navbar-brand" href="/">Nittany Auction</a>
+    <div class="ml-auto">
+        {% if session.get('user_id') %}
+            <span class="mr-3 text-muted">Welcome, {{ session.get('first_name') }}</span>
+            <a class="btn btn-outline-primary btn-sm px-3 mr-2" href="{{ url_for('seller_dashboard') }}">Dashboard</a>
+            <a class="btn btn-outline-danger btn-sm" href="{{ url_for('logout') }}">Logout</a>
+        {% endif %}
+    </div>
+</nav>
+
+<div class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+            </div>
+        {% endfor %}
+    {% endwith %}
+
+    <div class="header-section">
+        <h2 class="page-title">💰 Sales History</h2>
+        <p class="text-muted mb-0">Track your completed transactions and earnings.</p>
+    </div>
+
+    <div class="table-container">
+        {% if sales %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="thead-light">
+                    <tr>
+                        <th>Date</th>
+                        <th>Transaction ID</th>
+                        <th>Product</th>
+                        <th>Buyer</th>
+                        <th>Final Price</th>
+                        <th>Rating</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sale in sales %}
+                    <tr>
+                        <td>{{ sale.Date }}</td>
+                        <td>#{{ sale.Transaction_ID }}</td>
+                        <td>
+                            <strong>{{ sale.Auction_Title }}</strong><br>
+                            <small class="text-muted">{{ sale.Product_Name }}</small>
+                        </td>
+                        <td>{{ sale.Bidder_Name }}</td>
+                        <td class="text-success font-weight-bold">${{ "%.2f"|format(sale.Payment) }}</td>
+                        <td>
+                            {% if sale.Rating %}
+                                <div class="rating-stars">
+                                    {% for i in range(sale.Rating) %}★{% endfor %}{% for i in range(5 - sale.Rating) %}☆{% endfor %}
+                                </div>
+                                {% if sale.Rating_Desc %}
+                                    <div class="rating-desc">"{{ sale.Rating_Desc }}"</div>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted small">No rating yet</span>
+                            {% endif %}
+                        </td>
+                        <td><span class="status-badge">Sold</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <h4 class="text-muted">No sales records yet.</h4>
+            <p class="text-muted">Once your auctions are won and paid for, they will appear here.</p>
+            <a href="{{ url_for('seller_auction') }}" class="btn btn-primary mt-3">Manage Listings</a>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="text-center mt-4 mb-5">
+        <a href="{{ url_for('seller_dashboard') }}" class="btn btn-outline-secondary btn-custom">Back to Dashboard</a>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
+</body>
+</html>
