@@ -18,6 +18,17 @@
     3. Seller - Sirui
     4. Bidder - Jinyang
 3. TBD
+4. 
+5. TBD
+6. TBD
+7. TBD
+8. TBD
+
+9. Extra Credit 1 - Helpdesk Support
+    - Allow helpdesk to claim request, view and manage their requests, and mark as complete once completed.
+    - For Demo Purpose, we only implment Adding a new catrgory fucntion
+10. Extra Credit 2
+11. Extra Credit 3
 
 ## Features
 

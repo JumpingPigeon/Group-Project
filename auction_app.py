@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps # To create reusable login_required decorator
 import sqlite3 as sql
+import re
 from datetime import date, datetime
 
 app = Flask(__name__)
@@ -157,13 +158,9 @@ def dashboard_endpoint(user_type):
 
 
 @app.route('/bidder_dashboard')
+@login_required
 def bidder_dashboard():
-    if 'user_id' not in session:
-        flash('Login Required to view this page', 'danger')
-        return redirect(url_for('login'))
-
-    role = str(session.get('user_type', '')).strip().lower()
-    if role not in ('bidder'):
+    if session.get('user_type') != 'bidder':
         flash('Access denied.', 'danger')
         return redirect(url_for('login'))
 
@@ -477,6 +474,7 @@ def auction_payment(seller_email, listing_id):
         )
 
 @app.route("/helpdesk_dashboard")
+@login_required
 def helpdesk_dashboard():
     if not session.get("email"):
         return redirect(url_for("login"))
@@ -507,9 +505,12 @@ def helpdesk_dashboard():
                            my_assigned = my_assigned)
 
 @app.route("/seller_dashboard")
+@login_required
 def seller_dashboard():
-    if not session.get("email"):
-        return redirect(url_for("login"))
+    if session.get('user_type') != 'seller':
+        flash('Access denied. Seller privileges required.', 'danger')
+        return redirect(url_for('login'))
+    
     return render_template("seller_dashboard.html")
 
 @app.route('/')
@@ -1326,65 +1327,6 @@ def seller_profile():
 
     return render_template("seller_profile.html",email=email,)
 
-
-@app.route('/request_change_email', methods=['POST'])
-def request_change_email():
-    conn = get_db_connection()
-
-    try:
-        sender_email = session.get("email")
-        if not sender_email:
-            return redirect(url_for("login"))
-
-        new_email = request.form.get("new_email", "").strip()
-
-        if not new_email:
-            return redirect(url_for(f'{user_type}_profile', request_sent="0"))
-
-        if new_email == sender_email:
-            return redirect(url_for(f'{user_type}_profile', request_sent="same"))
-
-        # generate max id+1
-        row = conn.execute("""
-            SELECT MAX(request_id) FROM Requests
-        """).fetchone()
-
-        # if empty table start from 1
-        max_id = row[0] if row[0] is not None else 0
-        request_id = max_id + 1
-
-        helpdesk_email = "helpdeskteam@lsu.edu"
-        request_type = "ChangeID"
-        request_desc = f"Please change my ID from {sender_email} to {new_email}."
-        request_status = 0
-
-        conn.execute("""
-            INSERT INTO Requests (
-                request_id,
-                sender_email,
-                helpdesk_staff_email,
-                request_type,
-                request_desc,
-                request_status
-            )
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (
-            request_id,
-            sender_email,
-            helpdesk_email,
-            request_type,
-            request_desc,
-            request_status
-        ))
-
-        conn.commit()
-
-        # redirect back to profile
-        return redirect(url_for(f'{user_type}_profile', request_sent="1"))
-
-    finally:
-        conn.close()
-
 #this update password
 @app.route('/update_password', methods=['POST'])
 def update_profile():
@@ -1750,242 +1692,55 @@ def submit_request():
         import traceback
         traceback.print_exc()
         return redirect(url_for('submit_request'))
-
-# ==============================
-# 🌟 EXTRA CREDIT: HelpDesk - Add Category Request
-# ==============================
-
-# 1. 卖家提交新增分类请求
-@app.route('/submit_category_request', methods=['GET', 'POST'])
+    
+@app.route('/helpdesk/approve_category/<int:request_id>', methods=['POST'])
 @login_required
-def submit_category_request():
-    # 假设 session key 是 'user_id' 和 'user_type'
-    if session.get('user_type') != 'seller':
-        flash('Only sellers can request new categories.', 'danger')
-        return redirect(url_for('dashboard'))
+def helpdesk_approve_category(request_id):
+    if session.get('user_type') != 'helpdesk':
+        return redirect(url_for('login'))
 
-    if request.method == 'POST':
-        sender_email = session.get('user_id')
-        parent_category = request.form.get('parent_category').strip() # 必须提供父级
-        new_category = request.form.get('new_category').strip()       # 新类别名称
-        reason = request.form.get('reason').strip()
+    try:
+        with get_db_connection() as conn:
+            req = conn.execute('SELECT * FROM Requests WHERE request_id = ?', (request_id,)).fetchone()
+            if not req or req['request_type'] != 'AddCategory':
+                flash('Invalid request.', 'danger')
+                return redirect(url_for('helpdesk_dashboard'))
 
-        if not parent_category or not new_category:
-            flash('Both parent category and new category names are required.', 'danger')
-            return render_template('submit_category_request.html')
+            desc = req['request_desc']
+            new_cat = None
+            parent_cat = 'Root'
 
-        try:
-            with get_db_connection() as conn:
-                # 将结构化数据拼接到 desc 中，方便后续解析
-                structured_desc = f"Parent:{parent_category}|New:{new_category}|Reason:{reason}"
-                
-                conn.execute('''
-                    INSERT INTO Requests
-                    (sender_email, helpdesk_staff_email, request_type, request_desc, request_status)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', (
-                    sender_email,
-                    'helpdeskteam@lsu.edu', 
-                    'AddCategory',
-                    structured_desc,
-                    0  # Schema 规定：0 为未完成
-                ))
+            match = re.search(r"add a new category (.+) under (.+)", desc)
+            if match:
+                new_cat = match.group(1).strip()
+                parent_cat = match.group(2).strip()
+            else:
+                flash('Could not parse category details from request description.', 'danger')
+                return redirect(url_for('helpdesk_dashboard'))
+
+            if not new_cat:
+                flash('Category name is missing.', 'danger')
+                return redirect(url_for('helpdesk_dashboard'))
+
+            exists = conn.execute('SELECT 1 FROM Categories WHERE category_name = ?', (new_cat,)).fetchone()
+            if exists:
+                flash(f'Category "{new_cat}" already exists.', 'warning')
+            else:
+                conn.execute('INSERT INTO Categories (parent_category, category_name) VALUES (?, ?)', 
+                             (parent_cat, new_cat))
                 conn.commit()
-            flash('Category request submitted successfully! Pending HelpDesk approval.', 'success')
-            return redirect(url_for('seller_dashboard'))
-        except Exception as e:
-            flash(f'Error submitting request: {str(e)}', 'danger')
+                flash(f'Category "{new_cat}" added successfully under "{parent_cat}".', 'success')
 
-    return render_template('submit_category_request.html')
-@app.route('/approve_category_request', methods=['POST'])
-@login_required
-def approve_category_request():
-    if session.get('user_type') != 'helpdesk':
-        return redirect(url_for('login'))
-
-    request_id = request.form.get('request_id')
-    helpdesk_email = session.get('user_id')
-
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            
-            # 步骤 A：获取工单详情并解析字符串
-            req = cursor.execute('SELECT request_desc FROM Requests WHERE request_id = ? AND request_status = 0', (request_id,)).fetchone()
-            if not req:
-                flash('Request not found or already processed.', 'warning')
-                return redirect(url_for('helpdesk_dashboard'))
-
-            desc = req['request_desc'] # 例如 "Parent:Electronics|New:Drones|Reason:Need to sell drone"
-            
-            # 简单的字符串解析 (提取 Parent 和 New 的值)
-            parts = dict(item.split(":", 1) for item in desc.split("|"))
-            parent_cat = parts.get("Parent")
-            new_cat = parts.get("New")
-
-            # 步骤 B：执行事务 - 先插入新类别
-            cursor.execute('''
-                INSERT INTO Categories (parent_category, category_name)
-                VALUES (?, ?)
-            ''', (parent_cat, new_cat))
-
-            # 步骤 C：执行事务 - 将工单分配给自己，并标记为完成 (1)
-            cursor.execute('''
-                UPDATE Requests
-                SET helpdesk_staff_email = ?, request_status = 1
-                WHERE request_id = ?
-            ''', (helpdesk_email, request_id))
-            
+            # Mark request as completed
+            conn.execute('UPDATE Requests SET request_status = 2, helpdesk_staff_email = ? WHERE request_id = ?', 
+                         (session.get('email'), request_id))
             conn.commit()
-            flash(f'Success! Category "{new_cat}" has been added to the system.', 'success')
-            
+
     except Exception as e:
-        flash(f'Database Error (Category might already exist): {str(e)}', 'danger')
-
-    return redirect(url_for('helpdesk_dashboard'))
-
-
-# ==============================
-# 🌟 NEW: HelpDesk - Reject Category Request
-# ==============================
-
-@app.route('/reject_request', methods=['POST'])
-@login_required
-def reject_request():
-    if session.get('user_type') != 'helpdesk':
-        return redirect(url_for('login'))
-
-    request_id = request.form.get('request_id')
-    helpdesk_email = session.get('user_id')
-
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            
-            # 验证请求是否存在
-            req = cursor.execute('SELECT request_id FROM Requests WHERE request_id = ? AND request_status = 0', (request_id,)).fetchone()
-            if not req:
-                flash('Request not found or already processed.', 'warning')
-                return redirect(url_for('helpdesk_dashboard'))
-
-            # 标记为完成 (Status = 1)，但不执行插入操作
-            # 可以在 request_desc 后面追加 "(Rejected)" 以便留痕
-            cursor.execute('''
-                UPDATE Requests
-                SET helpdesk_staff_email = ?, request_status = 1, 
-                    request_desc = request_desc || ' [REJECTED by HelpDesk]'
-                WHERE request_id = ?
-            ''', (helpdesk_email, request_id))
-            
-            conn.commit()
-            flash('Category request has been rejected.', 'warning')
-            
-    except Exception as e:
-        flash(f'Error rejecting request: {str(e)}', 'danger')
-
-    return redirect(url_for('helpdesk_dashboard'))
-
-# ==============================
-# 🌟 NEW: HelpDesk - Claim Request
-# ==============================
-
-@app.route('/claim_request', methods=['POST'])
-@login_required
-def claim_request():
-    if session.get('user_type') != 'helpdesk':
-        flash('Access denied. HelpDesk personnel only.', 'danger')
-        return redirect(url_for('login'))
-
-    request_id = request.form.get('request_id')
-    helpdesk_email = session.get('user_id')
-
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            
-            # 检查请求是否存在且未被认领
-            req = cursor.execute('''
-                SELECT request_id, helpdesk_staff_email 
-                FROM Requests 
-                WHERE request_id = ? AND request_status = 0
-            ''', (request_id,)).fetchone()
-            
-            if not req:
-                flash('Request not found or already completed.', 'warning')
-                return redirect(url_for('helpdesk_dashboard'))
-            
-            # 如果已经被其他人认领
-            if req['helpdesk_staff_email'] != 'helpdeskteam@lsu.edu' and req['helpdesk_staff_email'] != helpdesk_email:
-                flash('This request has already been claimed by another staff member.', 'warning')
-                return redirect(url_for('helpdesk_dashboard'))
-            
-            # 认领请求：将 helpdesk_staff_email 更新为当前用户
-            cursor.execute('''
-                UPDATE Requests
-                SET helpdesk_staff_email = ?
-                WHERE request_id = ? AND request_status = 0
-            ''', (helpdesk_email, request_id))
-            
-            conn.commit()
-            flash('Request claimed successfully!', 'success')
-            
-    except Exception as e:
-        flash(f'Error claiming request: {str(e)}', 'danger')
-
-    return redirect(url_for('helpdesk_dashboard'))
-
-
-# ==============================
-# 🌟 NEW: HelpDesk - Mark Request as Completed
-# ==============================
-
-@app.route('/mark_completed', methods=['POST'])
-@login_required
-def mark_completed():
-    if session.get('user_type') != 'helpdesk':
-        flash('Access denied. HelpDesk personnel only.', 'danger')
-        return redirect(url_for('login'))
-
-    request_id = request.form.get('request_id')
-    helpdesk_email = session.get('user_id')
-
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            
-            # 验证请求是否属于当前用户
-            req = cursor.execute('''
-                SELECT request_id, helpdesk_staff_email, request_status
-                FROM Requests 
-                WHERE request_id = ?
-            ''', (request_id,)).fetchone()
-            
-            if not req:
-                flash('Request not found.', 'warning')
-                return redirect(url_for('helpdesk_dashboard'))
-            
-            # 只有认领者或管理员可以标记完成
-            if req['helpdesk_staff_email'] != helpdesk_email:
-                flash('You can only complete requests assigned to you.', 'warning')
-                return redirect(url_for('helpdesk_dashboard'))
-            
-            if req['request_status'] == 1:
-                flash('Request is already completed.', 'info')
-                return redirect(url_for('helpdesk_dashboard'))
-            
-            # 标记为完成
-            cursor.execute('''
-                UPDATE Requests
-                SET request_status = 1
-                WHERE request_id = ?
-            ''', (request_id,))
-            
-            conn.commit()
-            flash('Request marked as completed!', 'success')
-            
-    except Exception as e:
-        flash(f'Error completing request: {str(e)}', 'danger')
-
+        flash(f'Error approving category: {str(e)}', 'danger')
+        import traceback
+        traceback.print_exc()
+    
     return redirect(url_for('helpdesk_dashboard'))
 
 if __name__ == '__main__':

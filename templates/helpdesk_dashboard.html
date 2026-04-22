@@ -111,23 +111,19 @@
             </div>
             <div class="text-right">
                 {% if req.request_type == 'AddCategory' %}
-                    <!-- AddCategory -->
-                    <form action="{{ url_for('approve_category_request') }}" method="POST" class="d-inline">
-                        <input type="hidden" name="request_id" value="{{ req.request_id }}">
+                    <!-- AddCategory: Approve or Reject -->
+                    <form action="{{ url_for('helpdesk_approve_category', request_id=req.request_id) }}" method="POST" class="d-inline">
                         <button class="btn btn-success btn-sm mb-1">Approve</button>
                     </form>
-                    <form action="{{ url_for('reject_request') }}" method="POST" class="d-inline">
-                        <input type="hidden" name="request_id" value="{{ req.request_id }}">
+                    <form action="{{ url_for('helpdesk_reject', request_id=req.request_id) }}" method="POST" class="d-inline">
                         <button class="btn btn-danger btn-sm mb-1">Reject</button>
                     </form>
                 {% else %}
-                    <!-- Other Requests -->
-                    <form action="{{ url_for('mark_completed') }}" method="POST" class="d-inline">
-                        <input type="hidden" name="request_id" value="{{ req.request_id }}">
+                    <!-- Other Requests: Complete or Reject -->
+                    <form action="{{ url_for('helpdesk_complete', request_id=req.request_id) }}" method="POST" class="d-inline">
                         <button class="btn btn-outline-primary btn-sm mb-1">Complete</button>
                     </form>
-                    <form action="{{ url_for('reject_request') }}" method="POST" class="d-inline">
-                        <input type="hidden" name="request_id" value="{{ req.request_id }}">
+                    <form action="{{ url_for('helpdesk_reject', request_id=req.request_id) }}" method="POST" class="d-inline">
                         <button class="btn btn-danger btn-sm mb-1">Reject</button>
                     </form>
                 {% endif %}
@@ -147,7 +143,7 @@
                     <h5 class="mt-2">#{{ req.request_id }} - {{ req.sender_email }}</h5>
                     <p class="text-muted small mb-0">{{ req.request_desc }}</p>
                 </div>
-                <form action="{{ url_for('claim_request') }}" method="POST">
+                <form action="{{ url_for('helpdesk_claim', request_id=req.request_id) }}" method="POST">
                     <input type="hidden" name="request_id" value="{{ req.request_id }}">
                     <button type="submit" class="btn btn-lsu">Claim Task</button>
                 </form>
